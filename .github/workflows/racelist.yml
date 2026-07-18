@@ -36,8 +36,6 @@ jobs:
         run: |
           curl -fsSL "https://ayathyyy.github.io/boatrace-app/data/odds_today.json?t=$(date +%s)" -o data/odds_today.json || true
       - uses: actions/configure-pages@v5
-        with:
-          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: .
