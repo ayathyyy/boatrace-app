@@ -386,6 +386,37 @@
     <div class="race-type" id="raceTypeBanner"></div>
     <div class="table-scroll"><table class="bets-table" id="betsTable"></table></div>
     <div class="bets-total" id="betsTotal"></div>
+
+    <h2>4. 全買い目の確率・期待値（全券種）</h2>
+    <style>
+      .allbets-h { margin: 14px 0 4px; font-size: 1rem; }
+      .allbets-note { font-weight: normal; color: var(--sub); font-size: .8rem; }
+      .allbets-buy { padding: 4px 10px; }
+      .allbets-table td, .allbets-table th { white-space: nowrap; }
+    </style>
+    <details class="inhelp" id="allBetsBox">
+      <summary>🧮 全券種・全組み合わせの一覧を見る（買うかは別・参考）</summary>
+      <p class="basis-note">単勝・複勝の確率は過去1年実績で較正済み。2連単/2連複/ワイド/3連単/3連複は Harville 近似（較正なし＝参考値）。オッズは自動取得の時点値（— は未取得）。期待値＝確率×オッズで <b>1.2以上が🟢買い</b>（判定はオッズ下限で保守的に）。複勝・ワイドはオッズ幅から期待値も幅で表示。🛒 で下の購入履歴に記録できます。</p>
+      <div class="toolbar" style="margin:6px 0">
+        <label>🛒 記録するときの1点あたり掛け金 <input type="number" id="allBetsStake" value="100" min="100" step="100" style="width:90px"> 円</label>
+      </div>
+      <div id="allBetsTables"></div>
+    </details>
+
+    <h2>5. 購入履歴と収支</h2>
+    <details class="inhelp" id="purchaseBox">
+      <summary>📒 買った目の記録・収支を見る（この端末に保存）</summary>
+      <p class="basis-note">🛒 で記録した買い目の一覧。<b>状態をタップ</b>で ⏳未確定 → 🎯的中 → ❌外れ を切替（的中にすると払戻＝記録時オッズ×掛け金を自動計算。オッズは変動するため手修正できます）。データはこの端末のブラウザ内のみに保存（PCとスマホは別々）。</p>
+      <div class="toolbar" id="purchaseTabs" style="gap:6px;flex-wrap:wrap">
+        <button type="button" class="btn-sub" data-period="today">今日</button>
+        <button type="button" class="btn-sub" data-period="month">今月</button>
+        <button type="button" class="btn-sub" data-period="all">全期間</button>
+        <button type="button" class="btn-sub" id="purchaseCsvBtn">📋 CSVコピー</button>
+      </div>
+      <div class="bets-total" id="purchaseSummary"></div>
+      <div class="table-scroll"><table class="bets-table" id="purchaseTable"></table></div>
+      <div class="import-note" id="purchaseNote"></div>
+    </details>
   </section>
 
   <!-- ===== 設定 ===== -->
@@ -509,26 +540,235 @@ async function refreshPublishedOdds(timeoutMs) {
   return fetchedOdds;
 }
 // 自動取得オッズを state へ反映（applyRacelistBoats のクリア直後に呼ぶ）。反映できたら案内文を返す
+// v2スキーマ（複勝=[lo,hi]・quinella/wide/trifecta/trio 追加）と v1（複勝=数値・2連単まで）の両対応（T-20260718-08）
 function applyFetchedOdds(ymd, jcd, rno) {
   if (!fetchedOdds || fetchedOdds.date !== ymd) return null;
   const r = fetchedOdds.races && fetchedOdds.races[`${jcd}-${rno}`];
   if (!r) return null;
-  let nt = 0, nf = 0, ne = 0;
+  const loOf = v => Array.isArray(v) ? v[0] : v;
+  const hiOf = v => Array.isArray(v) ? v[1] : null;
+  let nt = 0, nf = 0, any = 0;
+  const fHi = [null, null, null, null, null, null];
   for (let i = 0; i < 6; i++) {
     const t = Array.isArray(r.tansho) ? r.tansho[i] : null;
-    const f = Array.isArray(r.fukusho) ? r.fukusho[i] : null;
+    const fv = Array.isArray(r.fukusho) ? r.fukusho[i] : null;
+    const f = loOf(fv);
     if (t != null && t >= 1) { state.boats[i].odds = String(t); nt++; }
-    if (f != null && f >= 1) { state.boats[i].placeOdds = String(f); nf++; }
+    if (f != null && f >= 1) { state.boats[i].placeOdds = String(f); fHi[i] = hiOf(fv); nf++; }
   }
+  const parts = [`単勝${nt}`, `複勝${nf}`];
+  any = nt + nf;
   if (r.exacta && typeof r.exacta === "object" && Object.keys(r.exacta).length) {
     state.exactaOdds = { ...r.exacta };
-    ne = Object.keys(r.exacta).length;
+    parts.push(`2連単${Object.keys(r.exacta).length}`);
+    any++;
   }
-  if (nt === 0 && nf === 0 && ne === 0) return null;
+  state.oddsExtra = { fukushoHi: fHi, quinella: {}, wide: {}, trifecta: {}, trio: {} };
+  for (const [k2, label] of [["quinella", "2連複"], ["wide", "ワイド"], ["trifecta", "3連単"], ["trio", "3連複"]]) {
+    const v = r[k2];
+    if (v && typeof v === "object" && Object.keys(v).length) {
+      state.oddsExtra[k2] = { ...v };
+      parts.push(`${label}${Object.keys(v).length}`);
+      any++;
+    }
+  }
+  if (!any) return null;
   state.oddsAt = r.at || null;
   fillFormFromState();
   saveState();
-  return `💰 ${r.at || "?"}時点のオッズを自動入力しました（単勝${nt}・複勝${nf}・2連単${ne}件）。締切が近いときはもう一度「取り込む」で最新化できます。`;
+  return `💰 ${r.at || "?"}時点のオッズを自動入力しました（${parts.join("・")}件）。締切が近いときはもう一度「取り込む」で最新化できます。`;
+}
+
+/* =========================================================
+   全買い目の確率・期待値一覧 ＋ 購入記録・収支
+   設計: 20_設計/02_フェーズ1_予測ロジック設計.md §追補（T-20260718-08）
+   確率: 3連単120通りを Harville 近似で直接計算し、他券種はそこから集計。
+   単勝・複勝の確率は較正済み値（calWin/calTop2）を使う。
+========================================================= */
+function computeAllProbs(confPercents) {
+  const raw = confPercents.map(c => Math.max(Number(c) || 0, 0.01));
+  const tot = raw.reduce((a, b) => a + b, 0);
+  const q = raw.map(v => v / tot);              // 合計1に正規化
+  const trifecta = {}, trio = {}, wide = {}, exacta = {}, quinella = {};
+  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) {
+    if (b === a) continue;
+    const pab = q[a - 1] * q[b - 1] / (1 - q[a - 1]);
+    exacta[`${a}-${b}`] = pab;
+    const qk = a < b ? `${a}-${b}` : `${b}-${a}`;
+    quinella[qk] = (quinella[qk] || 0) + pab;
+    for (let c = 1; c <= 6; c++) {
+      if (c === a || c === b) continue;
+      const p3 = pab * q[c - 1] / (1 - q[a - 1] - q[b - 1]);
+      trifecta[`${a}-${b}-${c}`] = p3;
+      const st = [a, b, c].sort((x, y) => x - y);
+      const tk = st.join("-");
+      trio[tk] = (trio[tk] || 0) + p3;
+      for (const [x, y] of [[st[0], st[1]], [st[0], st[2]], [st[1], st[2]]]) {
+        const wk = `${x}-${y}`;
+        wide[wk] = (wide[wk] || 0) + p3;
+      }
+    }
+  }
+  return { q, exacta, quinella, trifecta, trio, wide };
+}
+
+// 一覧テーブルの描画（predict 実行のたびに renderResult から呼ぶ）
+function renderAllBets(result) {
+  const box = document.getElementById("allBetsTables");
+  if (!box) return;
+  const confByLane = [0, 0, 0, 0, 0, 0];
+  result.ranked.forEach(b => { confByLane[b.lane - 1] = b.confidence; });
+  const P = computeAllProbs(confByLane);
+  const extra = state.oddsExtra || {};
+  const exOdds = state.exactaOdds || {};
+  const num1 = v => { const n = Number(v); return v != null && !Number.isNaN(n) && n >= 1 ? n : null; };
+  const rangeOf = v => Array.isArray(v) ? [num1(v[0]), num1(v[1])] : [num1(v), null];
+  const fmtP = p => (p * 100).toFixed(p >= 0.1 ? 1 : 2) + "%";
+  const fmtEv = (lo, hi) => hi != null && hi.toFixed(2) !== lo.toFixed(2) ? `${lo.toFixed(2)}〜${hi.toFixed(2)}` : lo.toFixed(2);
+  const fmtOdds = (lo, hi) => lo == null ? "—" : (hi != null && hi !== lo ? `${lo}〜${hi}` : String(lo));
+
+  const sections = [
+    { bt: "単勝", note: "確率=較正済み1着率",
+      rows: [1, 2, 3, 4, 5, 6].map(l => ({ target: String(l), p: calWin(confByLane[l - 1]), lo: getOdds(l - 1), hi: null })) },
+    { bt: "複勝", note: "確率=較正済み2着以内率・オッズ幅→期待値も幅",
+      rows: [1, 2, 3, 4, 5, 6].map(l => ({ target: String(l), p: calTop2(confByLane[l - 1]),
+        lo: getPlaceOdds(l - 1), hi: num1((extra.fukushoHi || [])[l - 1]) })) },
+    { bt: "2連単", note: "Harville近似", map: P.exacta, oddsMap: exOdds },
+    { bt: "2連複", note: "Harville近似", map: P.quinella, oddsMap: extra.quinella || {} },
+    { bt: "ワイド", note: "Harville近似・オッズ幅→期待値も幅", map: P.wide, oddsMap: extra.wide || {}, range: true },
+    { bt: "3連単", note: "Harville近似（較正なし・参考）", map: P.trifecta, oddsMap: extra.trifecta || {} },
+    { bt: "3連複", note: "Harville近似（較正なし・参考）", map: P.trio, oddsMap: extra.trio || {} },
+  ];
+
+  let html = "";
+  for (const sec of sections) {
+    let rows = sec.rows;
+    if (!rows) {
+      rows = Object.entries(sec.map).map(([k, p]) => {
+        const [lo, hi] = sec.range ? rangeOf(sec.oddsMap[k]) : [num1(sec.oddsMap[k]), null];
+        return { target: k, p, lo, hi };
+      });
+    }
+    rows.forEach(r => {
+      r.ev = r.lo != null ? r.p * r.lo : null;                     // 判定は下限（保守的）
+      r.evHi = r.lo != null && r.hi != null ? r.p * r.hi : null;
+    });
+    rows.sort((a, b) => (b.ev ?? -1) - (a.ev ?? -1) || b.p - a.p);
+    const nOdds = rows.filter(r => r.lo != null).length;
+    html += `<h3 class="allbets-h">${sec.bt} <span class="allbets-note">（${rows.length}通り・${sec.note}${nOdds ? "" : "・オッズ未取得"}）</span></h3>`;
+    html += `<div class="table-scroll"><table class="bets-table allbets-table">`
+      + `<tr><th>買い目</th><th>推定確率</th><th>オッズ</th><th>期待値</th><th>判定</th><th></th></tr>`;
+    for (const r of rows) {
+      const badge = r.ev != null ? evBadge(r.ev) : "";
+      const buyBtn = r.lo != null
+        ? `<button type="button" class="btn-sub allbets-buy" data-buy="1" data-bt="${sec.bt}" data-target="${r.target}" data-odds="${r.lo}" data-ev="${r.ev.toFixed(3)}">🛒</button>`
+        : "";
+      html += `<tr><td><b>${r.target}</b></td><td>${fmtP(r.p)}</td>`
+        + `<td>${fmtOdds(r.lo, r.hi)}</td>`
+        + `<td>${r.ev != null ? fmtEv(r.ev, r.evHi) : "—"}</td>`
+        + `<td>${badge}</td><td>${buyBtn}</td></tr>`;
+    }
+    html += `</table></div>`;
+  }
+  box.innerHTML = html;
+}
+
+/* ---- 購入記録・履歴・収支（localStorage・この端末のみ）---- */
+const PURCHASE_KEY = "boatrace-purchases-v1";
+let raceCtx = null;          // 直近「取り込む」したレース {ymd,jcd,rno}
+let purchasePeriod = "today";
+
+function loadPurchases() {
+  try {
+    const a = JSON.parse(localStorage.getItem(PURCHASE_KEY) || "[]");
+    return Array.isArray(a) ? a : [];
+  } catch (e) { return []; }
+}
+function savePurchases(a) {
+  try { localStorage.setItem(PURCHASE_KEY, JSON.stringify(a)); } catch (e) { console.warn("購入記録の保存に失敗", e); }
+}
+function addPurchase(betType, target, odds, ev) {
+  const stakeEl = document.getElementById("allBetsStake");
+  let stake = Math.round((Number(stakeEl && stakeEl.value) || 100) / 100) * 100;
+  if (stake < 100) stake = 100;
+  const now = new Date();
+  const arr = loadPurchases();
+  arr.push({
+    id: now.getTime() + "-" + Math.random().toString(36).slice(2, 6),
+    ts: now.toISOString(),
+    date: (raceCtx && raceCtx.ymd) || isoToYmd(todayISO()),
+    jcd: raceCtx ? raceCtx.jcd : "",
+    rno: raceCtx ? raceCtx.rno : "",
+    betType, target,
+    odds: odds != null ? odds : null,   // 記録時点のオッズ（複勝・ワイドは下限）
+    ev: ev != null ? ev : null,
+    stake, status: "未確定", payout: 0,
+  });
+  savePurchases(arr);
+  renderPurchases();
+}
+function purchaseFilter(arr) {
+  const today = isoToYmd(todayISO());
+  if (purchasePeriod === "today") return arr.filter(p => p.date === today);
+  if (purchasePeriod === "month") return arr.filter(p => (p.date || "").slice(0, 6) === today.slice(0, 6));
+  return arr;
+}
+function renderPurchaseSummary(rows) {
+  const el = document.getElementById("purchaseSummary");
+  if (!el) return;
+  const invest = rows.reduce((s, p) => s + (p.stake || 0), 0);
+  const ret = rows.reduce((s, p) => s + (p.status === "的中" ? (Number(p.payout) || 0) : 0), 0);
+  const pending = rows.filter(p => p.status === "未確定").length;
+  const label = { today: "今日", month: "今月", all: "全期間" }[purchasePeriod];
+  el.textContent = rows.length === 0
+    ? `${label}: 記録はまだありません。上の一覧の 🛒 で買い目を記録できます。`
+    : `${label}: ${rows.length}件 ／ 投資 ${invest.toLocaleString()}円 → 払戻 ${ret.toLocaleString()}円 ／ 損益 ${(ret - invest).toLocaleString()}円 ／ 回収率 ${invest ? (ret / invest * 100).toFixed(1) : "-"}%`
+      + (pending ? `（⏳未確定 ${pending}件を含む）` : "");
+}
+function renderPurchases() {
+  const table = document.getElementById("purchaseTable");
+  if (!table) return;
+  const rows = purchaseFilter(loadPurchases()).sort((a, b) => (b.ts || "").localeCompare(a.ts || ""));
+  renderPurchaseSummary(rows);
+  const stIcon = { "未確定": "⏳未確定", "的中": "🎯的中", "外れ": "❌外れ" };
+  table.innerHTML = `<tr><th>日付</th><th>レース</th><th>券種</th><th>買い目</th><th>オッズ</th><th>掛金</th><th>状態</th><th>払戻</th><th>損益</th><th></th></tr>`
+    + rows.map(p => {
+      const race = p.jcd ? `${JCD_NAMES[p.jcd] || p.jcd}${p.rno}R` : "-";
+      const pl = (p.status === "的中" ? (Number(p.payout) || 0) : 0) - (p.stake || 0);
+      const plTxt = p.status === "未確定" ? "—" : `${pl >= 0 ? "+" : ""}${pl.toLocaleString()}円`;
+      return `<tr>`
+        + `<td>${(p.date || "").slice(4, 6)}/${(p.date || "").slice(6, 8)}</td>`
+        + `<td>${race}</td><td>${p.betType}</td><td><b>${p.target}</b></td>`
+        + `<td>${p.odds != null ? p.odds : "—"}</td>`
+        + `<td>${(p.stake || 0).toLocaleString()}円</td>`
+        + `<td><button type="button" class="btn-sub" data-act="status" data-id="${p.id}">${stIcon[p.status] || p.status}</button></td>`
+        + `<td>${p.status === "的中"
+            ? `<input type="number" data-act="payout" data-id="${p.id}" value="${Number(p.payout) || 0}" min="0" step="10" style="width:80px">`
+            : "—"}</td>`
+        + `<td>${plTxt}</td>`
+        + `<td><button type="button" class="btn-danger" data-act="del" data-id="${p.id}" title="削除">✖</button></td>`
+        + `</tr>`;
+    }).join("");
+}
+function copyPurchasesCsv() {
+  const note = document.getElementById("purchaseNote");
+  const rows = purchaseFilter(loadPurchases());
+  const head = "日付,会場,レース,券種,買い目,オッズ,掛金,状態,払戻,損益";
+  const body = rows.map(p => {
+    const pl = (p.status === "的中" ? (Number(p.payout) || 0) : 0) - (p.stake || 0);
+    return [p.date, JCD_NAMES[p.jcd] || p.jcd || "", p.rno || "", p.betType, p.target,
+            p.odds != null ? p.odds : "", p.stake || 0, p.status,
+            p.status === "的中" ? (Number(p.payout) || 0) : 0,
+            p.status === "未確定" ? "" : pl].join(",");
+  });
+  const csv = [head, ...rows.length ? body : []].join("\n");
+  const done = ok => {
+    note.className = "import-note " + (ok ? "ok" : "warn");
+    note.textContent = ok ? `✅ ${rows.length}件をCSVとしてコピーしました（Excel等に貼り付けできます）` : "⚠ コピーに失敗しました。ブラウザの権限をご確認ください。";
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(csv).then(() => done(true), () => done(false));
+  } else { done(false); }
 }
 
 /* =========================================================
@@ -605,6 +845,7 @@ let state = {
   budget: 1000,
   exactaOdds: {},   // 2連単オッズ { "i-j": odds }（貼り付けで自動入力）
   oddsAt: null,     // オッズの取得時刻 "HH:MM"（自動取得）/ "手動入力"（貼り付け）/ null（未入力）
+  oddsExtra: null,  // 追加券種オッズ { fukushoHi:[6], quinella:{}, wide:{}, trifecta:{}, trio:{} }（v2自動取得・T-20260718-08）
 };
 
 function saveState() {
@@ -626,6 +867,7 @@ function loadState() {
     if (s && typeof s.budget === "number") state.budget = s.budget;
     if (s && s.exactaOdds && typeof s.exactaOdds === "object") state.exactaOdds = s.exactaOdds;
     if (s && typeof s.oddsAt === "string") state.oddsAt = s.oddsAt;
+    if (s && s.oddsExtra && typeof s.oddsExtra === "object") state.oddsExtra = s.oddsExtra;
   } catch (e) {
     console.warn("保存データの読み込みに失敗しました", e);
   }
@@ -878,6 +1120,7 @@ function applyRacelistBoats(boats) {
   }
   state.exactaOdds = {};
   state.oddsAt = null;
+  state.oddsExtra = null;
   fillFormFromState();
   saveState();
   return { n, nFan };
@@ -906,13 +1149,16 @@ function parsePastedOdds(text) {
   const RANGE = /(\d+\.\d+)\s*-\s*(\d+\.\d+)/g;   // 複勝レンジ（下限=m[1]）
   const SINGLE = /\d+\.\d+|\d{4,}/g;              // 単勝: 小数 or 4桁以上の整数（万舟級=1000倍超は公式が小数点省略・T-20260715-01）。号艇(1桁)は拾わない
 
-  // 複勝: 領域（無ければ全文）からレンジを抽出し下限を採用
+  // 複勝: 領域（無ければ全文）からレンジを抽出し下限＋上限を採用（上限はEV幅表示用・T-20260718-08）
   const fukusho = [];
+  const fukushoHi = [];
   let mf;
   const fukuSrc = fukuRegion || t;
   while ((mf = RANGE.exec(fukuSrc)) !== null && fukusho.length < 6) {
     const lo = parseFloat(mf[1]);
+    const hi = parseFloat(mf[2]);
     fukusho.push(lo > 0 ? lo : null);   // 0.0 は欠場・未発売として null
+    fukushoHi.push(hi > 0 ? hi : null);
   }
 
   // 単勝: 単勝領域からレンジをマスクして単一小数を抽出（順序耐性のため）
@@ -926,7 +1172,7 @@ function parsePastedOdds(text) {
 
   if (tansho.length < 6) warnings.push(`単勝オッズを${tansho.length}艇分しか読み取れませんでした（6艇必要）。コピー範囲や欠場をご確認のうえ、不足分は手入力してください`);
   if (fukusho.length < 6) warnings.push(`複勝オッズを${fukusho.length}艇分しか読み取れませんでした。不足分は手入力してください`);
-  return { tansho, fukusho, warnings };
+  return { tansho, fukusho, fukushoHi, warnings };
 }
 
 // 公式2連単オッズページのコピー本文から 2連単オッズ { "i-j": odds } を抽出する（i=1着・j=2着）。
@@ -1223,6 +1469,9 @@ function renderResult(result) {
   }
   document.getElementById("betsTotal").textContent = totalNote;
 
+  renderAllBets(result);   // 🧮 全買い目の確率・期待値一覧（T-20260718-08）
+  renderPurchases();       // 📒 購入履歴（期間サマリを最新化）
+
   section.scrollIntoView({ behavior: "smooth", block: "start" });
 }
 
@@ -1377,6 +1626,7 @@ async function applySelectedRace() {
       note.textContent = `⚠ ${JCD_NAMES[jcd] || jcd} ${rno}R（${fmtYmd(ymd)}）の出走表がデータにありません。●が付いた会場・レースを選ぶか、日付を確認してください。`;
       return;
     }
+    raceCtx = { ymd, jcd, rno };   // 購入記録用のレース文脈（T-20260718-08）
     const { n, nFan } = applyRacelistBoats(boats);
     const oddsMsg = applyFetchedOdds(ymd, jcd, rno);
     showErrors([]);
@@ -1532,10 +1782,15 @@ function bindEvents() {
     let nt = 0, nf = 0, ne = 0;
     const allWarn = [];
     if (has単複) {
-      const { tansho, fukusho, warnings } = parsePastedOdds(raw);
+      const { tansho, fukusho, fukushoHi, warnings } = parsePastedOdds(raw);
+      if (!state.oddsExtra) state.oddsExtra = { fukushoHi: [null, null, null, null, null, null], quinella: {}, wide: {}, trifecta: {}, trio: {} };
       for (let i = 0; i < 6; i++) {
         if (tansho[i] != null) { state.boats[i].odds = String(tansho[i]); nt++; }
-        if (fukusho[i] != null) { state.boats[i].placeOdds = String(fukusho[i]); nf++; }
+        if (fukusho[i] != null) {
+          state.boats[i].placeOdds = String(fukusho[i]);
+          state.oddsExtra.fukushoHi[i] = fukushoHi[i] != null ? fukushoHi[i] : null;  // EV幅表示用（T-20260718-08）
+          nf++;
+        }
       }
       allWarn.push(...warnings);
     }
@@ -1592,6 +1847,7 @@ function bindEvents() {
     state.boats = Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" }));
     state.exactaOdds = {};
     state.oddsAt = null;
+    state.oddsExtra = null;
     fillFormFromState();
     document.getElementById("resultSection").hidden = true;
     // 貼り付け欄と取込メッセージも一緒にクリアする
@@ -1643,12 +1899,61 @@ function bindEvents() {
     note.className = "import-note";
     note.textContent = "🗑 読み込んだ出走表データを消しました（アプリ埋め込みデータがあればそれを使います）。";
   });
+
+  // 🧮 全買い目一覧の「🛒買う」→ 購入記録に追加（T-20260718-08）
+  document.getElementById("allBetsTables").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-buy]");
+    if (!btn) return;
+    addPurchase(btn.dataset.bt, btn.dataset.target,
+                btn.dataset.odds ? Number(btn.dataset.odds) : null,
+                btn.dataset.ev ? Number(btn.dataset.ev) : null);
+    document.getElementById("purchaseBox").open = true;
+    btn.textContent = "✅";
+    setTimeout(() => { btn.textContent = "🛒"; }, 1200);
+  });
+  // 📒 購入履歴: 期間タブ・CSVコピー
+  document.getElementById("purchaseTabs").addEventListener("click", e => {
+    const b = e.target.closest("button");
+    if (!b) return;
+    if (b.id === "purchaseCsvBtn") { copyPurchasesCsv(); return; }
+    if (b.dataset.period) { purchasePeriod = b.dataset.period; renderPurchases(); }
+  });
+  // 📒 購入履歴: 状態切替（未確定→的中→外れ）・削除
+  document.getElementById("purchaseTable").addEventListener("click", e => {
+    const b = e.target.closest("[data-act]");
+    if (!b || b.dataset.act === "payout") return;
+    const arr = loadPurchases();
+    const p = arr.find(x => x.id === b.dataset.id);
+    if (!p) return;
+    if (b.dataset.act === "status") {
+      p.status = p.status === "未確定" ? "的中" : (p.status === "的中" ? "外れ" : "未確定");
+      if (p.status === "的中") p.payout = p.odds != null ? Math.round(p.odds * p.stake) : 0;  // 払戻=オッズ×掛け金（手修正可）
+      if (p.status !== "的中") p.payout = 0;
+      savePurchases(arr);
+      renderPurchases();
+    } else if (b.dataset.act === "del") {
+      savePurchases(arr.filter(x => x.id !== p.id));
+      renderPurchases();
+    }
+  });
+  // 📒 購入履歴: 払戻の手修正（フォーカスを保つためサマリのみ更新）
+  document.getElementById("purchaseTable").addEventListener("input", e => {
+    const inp = e.target.closest("input[data-act='payout']");
+    if (!inp) return;
+    const arr = loadPurchases();
+    const p = arr.find(x => x.id === inp.dataset.id);
+    if (!p) return;
+    p.payout = Math.max(0, Number(inp.value) || 0);
+    savePurchases(arr);
+    renderPurchaseSummary(purchaseFilter(arr).sort((a, b) => (b.ts || "").localeCompare(a.ts || "")));
+  });
 }
 
 // ---- 起動 ----
 loadState();
 buildBoatCards();
 buildSettings();
+renderPurchases();   // 📒 購入履歴の初期表示（T-20260718-08）
 // 「入力する数字のかんたん解説」を設定画面（重み・イン補正）にも複製表示（内容は単一ソース）
 {
   const helpClone = document.getElementById("metricsHelp").cloneNode(true);
