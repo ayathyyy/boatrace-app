@@ -694,9 +694,21 @@ function loadPurchases() {
 function savePurchases(a) {
   try { localStorage.setItem(PURCHASE_KEY, JSON.stringify(a)); } catch (e) { console.warn("購入記録の保存に失敗", e); }
 }
-function addPurchase(betType, target, odds, ev) {
-  const stakeEl = document.getElementById("allBetsStake");
-  let stake = Math.round((Number(stakeEl && stakeEl.value) || 100) / 100) * 100;
+// 券種と買い目から現在の入力オッズを引く（おすすめ買い目の🛒用・T-20260718-10）
+function oddsForBet(type, target) {
+  if (type === "単勝") return getOdds(Number(target) - 1);
+  if (type === "複勝") return getPlaceOdds(Number(target) - 1);
+  if (type === "2連単") return getExactaOdds(target);
+  return null;
+}
+function addPurchase(betType, target, odds, ev, stakeOverride) {
+  let stake;
+  if (stakeOverride != null) {
+    stake = Math.round((Number(stakeOverride) || 100) / 100) * 100;   // おすすめ買い目: 行の金額欄（変更可）
+  } else {
+    const stakeEl = document.getElementById("allBetsStake");
+    stake = Math.round((Number(stakeEl && stakeEl.value) || 100) / 100) * 100;
+  }
   if (stake < 100) stake = 100;
   const now = new Date();
   const arr = loadPurchases();
@@ -1450,7 +1462,7 @@ function renderResult(result) {
 
   const table = document.getElementById("betsTable");
   table.innerHTML = `
-    <tr><th>券種</th><th>買い目</th><th>推定的中率</th>${anyOdds ? "<th>期待値</th>" : ""}<th>メモ</th><th>金額</th></tr>
+    <tr><th>券種</th><th>買い目</th><th>推定的中率</th>${anyOdds ? "<th>期待値</th>" : ""}<th>メモ</th><th>金額</th><th>購入</th></tr>
     ${plan.bets.map(b => `
       <tr>
         <td>${b.type}</td>
@@ -1458,7 +1470,8 @@ function renderResult(result) {
         <td>${(b.p * 100).toFixed(1)}%</td>
         ${anyOdds ? `<td>${evCell(b)}</td>` : ""}
         <td style="font-size:.82rem;color:var(--sub)">${b.desc}</td>
-        <td class="amount">${b.amount.toLocaleString()}円</td>
+        <td class="amount"><input type="number" class="bet-amount-input" value="${b.amount}" min="100" step="100" style="width:84px;text-align:right">円</td>
+        <td><button type="button" class="btn-sub allbets-buy" data-buybet="1" data-bt="${b.type}" data-target="${b.target}" title="左の金額で購入履歴に記録（金額は変更可）">🛒</button></td>
       </tr>`).join("")}
   `;
   const total = plan.bets.reduce((s, b) => s + b.amount, 0);
@@ -1907,6 +1920,18 @@ function bindEvents() {
     note.textContent = "🗑 読み込んだ出走表データを消しました（アプリ埋め込みデータがあればそれを使います）。";
   });
 
+  // 💴 おすすめ買い目の「🛒購入」→ 行の金額（変更可）で購入記録に追加（T-20260718-10）
+  document.getElementById("betsTable").addEventListener("click", e => {
+    const btn = e.target.closest("button[data-buybet]");
+    if (!btn) return;
+    const amountInput = btn.closest("tr").querySelector("input.bet-amount-input");
+    const odds = oddsForBet(btn.dataset.bt, btn.dataset.target);
+    addPurchase(btn.dataset.bt, btn.dataset.target, odds, null,
+                amountInput ? amountInput.value : null);
+    document.getElementById("purchaseBox").open = true;
+    btn.textContent = "✅";
+    setTimeout(() => { btn.textContent = "🛒"; }, 1200);
+  });
   // 🧮 全買い目一覧の「🛒買う」→ 購入記録に追加（T-20260718-08）
   document.getElementById("allBetsTables").addEventListener("click", e => {
     const btn = e.target.closest("button[data-buy]");
