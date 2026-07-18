@@ -1,0 +1,33 @@
+# オッズ収集: 09:07〜21:37 JST の30分おきに全レースの単勝/複勝/2連単を取得し Pages へデプロイ
+# odds_today.json はコミットしない（履歴肥大防止・設計09）。cron は UTC（0-12時 = 9-21時 JST）。
+name: odds
+on:
+  schedule:
+    - cron: "7,37 0-12 * * *"
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+jobs:
+  odds:
+    runs-on: ubuntu-latest
+    timeout-minutes: 28
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install requests
+      - name: fetch odds (all venues / all races)
+        run: python scripts/fetch_odds.py
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - uses: actions/deploy-pages@v4

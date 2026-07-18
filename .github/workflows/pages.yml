@@ -1,0 +1,30 @@
+# アプリ更新時のデプロイ: main への push で Pages を再デプロイ（当日オッズは live から引き継ぐ）
+name: pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.actor != 'boatrace-bot'   # racelist.yml の bot コミットでは走らせない（自前でデプロイ済み）
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: carry over today's odds from live site
+        run: |
+          curl -fsSL "https://ayathyyy.github.io/boatrace-app/data/odds_today.json?t=$(date +%s)" -o data/odds_today.json || true
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - uses: actions/deploy-pages@v4

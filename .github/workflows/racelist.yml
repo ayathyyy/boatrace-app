@@ -1,0 +1,44 @@
+# 毎朝の出走表生成: mbrace の当日B → data/racelist_today.json をコミット → Pages デプロイ
+# cron は UTC（23:18 UTC = 翌 08:18 JST / 00:32 UTC = 09:32 JST リトライ）。日付判定はスクリプト側で JST。
+name: racelist
+on:
+  schedule:
+    - cron: "18 23 * * *"
+    - cron: "32 0 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+concurrency:
+  group: site-deploy
+  cancel-in-progress: false
+jobs:
+  racelist:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: generate racelist_today.json
+        run: python scripts/fetch_racelist.py
+      - name: commit if changed
+        run: |
+          git config user.name "boatrace-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add data/racelist_today.json
+          git diff --cached --quiet || git commit -m "racelist: $(TZ=Asia/Tokyo date +%Y-%m-%d)"
+          git push
+      - name: carry over today's odds from live site
+        run: |
+          curl -fsSL "https://ayathyyy.github.io/boatrace-app/data/odds_today.json?t=$(date +%s)" -o data/odds_today.json || true
+      - uses: actions/configure-pages@v5
+        with:
+          enablement: true
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+      - uses: actions/deploy-pages@v4

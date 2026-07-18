@@ -1,0 +1,1567 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🚤 競艇予測アプリ — フェーズ1</title>
+<style>
+  /* ===== 基本デザイン ===== */
+  :root {
+    --bg: #f0f4f8;
+    --card: #ffffff;
+    --ink: #1a2733;
+    --sub: #5a6b7b;
+    --line: #dbe4ec;
+    --accent: #0b63b6;
+    --accent-dark: #094e8f;
+    --ok: #2e9e4f;
+    --warn: #c9302c;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: "Segoe UI", "Hiragino Kaku Gothic ProN", "Yu Gothic UI", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--ink);
+    line-height: 1.6;
+  }
+  header {
+    background: linear-gradient(120deg, #0a3d62, #0b63b6);
+    color: #fff;
+    padding: 20px 16px;
+    text-align: center;
+  }
+  header h1 { margin: 0; font-size: 1.4rem; }
+  header p { margin: 4px 0 0; font-size: 0.85rem; opacity: 0.85; }
+  main { max-width: 1200px; margin: 0 auto; padding: 16px; }
+  h2 { font-size: 1.1rem; border-left: 5px solid var(--accent); padding-left: 10px; margin: 28px 0 12px; }
+  section { margin-bottom: 8px; }
+
+  /* ===== ボタン ===== */
+  button {
+    font-size: 1rem;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    cursor: pointer;
+    transition: filter .15s;
+  }
+  button:hover { filter: brightness(1.08); }
+  .btn-primary {
+    background: var(--accent); color: #fff;
+    font-size: 1.15rem; font-weight: bold;
+    width: 100%; padding: 14px; margin-top: 14px;
+    box-shadow: 0 3px 8px rgba(11,99,182,.35);
+  }
+  .btn-sub { background: #e3ecf4; color: var(--accent-dark); font-size: 0.9rem; }
+  .btn-danger { background: #fdecea; color: var(--warn); font-size: 0.9rem; }
+  .toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+
+  /* ===== 入力カード ===== */
+  .boats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(290px, 1fr));
+    gap: 12px;
+  }
+  .boat-card {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 12px 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .boat-head { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .lane-chip {
+    display: inline-flex; align-items: center; justify-content: center;
+    width: 30px; height: 30px; border-radius: 6px;
+    font-weight: bold; font-size: 1rem; flex: none;
+    border: 1px solid rgba(0,0,0,.25);
+  }
+  .boat-head input[type="text"] {
+    flex: 1; min-width: 0;
+    font-size: 1rem; padding: 6px 8px;
+    border: 1px solid var(--line); border-radius: 6px;
+  }
+  .field-row {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 8px; padding: 3px 0;
+  }
+  .field-row label { font-size: 0.83rem; color: var(--sub); flex: 1; }
+  .field-row input {
+    width: 92px; font-size: 1rem; text-align: right;
+    padding: 5px 6px; border: 1px solid var(--line); border-radius: 6px;
+  }
+  input:focus { outline: 2px solid #9cc4e8; }
+  input.invalid { border-color: var(--warn); background: #fff5f5; }
+  .hint { font-size: 0.72rem; color: #8fa1b0; }
+  a { color: var(--accent); }
+
+  /* ===== 掛け金 ===== */
+  .budget-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 14px; margin-top: 12px;
+    display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+  }
+  .budget-box label { font-weight: bold; }
+  .budget-box input {
+    width: 130px; font-size: 1.2rem; text-align: right;
+    padding: 8px; border: 1px solid var(--line); border-radius: 8px;
+  }
+
+  /* ===== エラー ===== */
+  .error-box {
+    display: none;
+    background: #fdecea; color: var(--warn);
+    border: 1px solid #f5c6c3; border-radius: 8px;
+    padding: 10px 14px; margin-top: 12px; font-size: 0.9rem;
+    white-space: pre-line;
+  }
+  .error-box.show { display: block; }
+
+  /* ===== 予測結果 ===== */
+  .rank-card {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 10px 14px; margin-bottom: 8px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .rank-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .rank-no { font-size: 1.25rem; font-weight: bold; width: 55px; flex: none; }
+  .rank-name { font-weight: bold; flex: 1; min-width: 120px; }
+  .conf-wrap { flex: 2; min-width: 150px; display: flex; align-items: center; gap: 8px; }
+  .conf-bar-bg { flex: 1; height: 12px; background: #e8eef4; border-radius: 6px; overflow: hidden; }
+  .conf-bar { height: 100%; background: linear-gradient(90deg, #4da3e8, #0b63b6); border-radius: 6px; }
+  .conf-num { font-weight: bold; width: 62px; text-align: right; flex: none; }
+  .close-race {
+    display: inline-block; background: #fff3cd; color: #8a6d1a;
+    border: 1px solid #ffe08a; border-radius: 6px;
+    font-size: 0.8rem; padding: 1px 8px; margin-left: 6px;
+  }
+  details.basis { margin-top: 6px; }
+  details.basis summary { cursor: pointer; color: var(--accent); font-size: 0.85rem; }
+  .basis-table { width: 100%; border-collapse: collapse; font-size: 0.82rem; margin-top: 6px; }
+  .basis-table th, .basis-table td { border: 1px solid var(--line); padding: 4px 6px; text-align: right; }
+  .basis-table th { background: #f2f6fa; font-weight: normal; color: var(--sub); }
+  .basis-table td:first-child, .basis-table th:first-child { text-align: left; }
+  .basis-note { font-size: 0.78rem; color: var(--sub); margin-top: 4px; }
+  .table-scroll { overflow-x: auto; }
+
+  /* ===== 買い目 ===== */
+  .bets-table { width: 100%; border-collapse: collapse; background: var(--card); }
+  .bets-table th, .bets-table td { border: 1px solid var(--line); padding: 8px 10px; text-align: center; font-size: 0.95rem; }
+  .bets-table th { background: #eef4fa; }
+  .bets-table .amount { font-weight: bold; color: var(--accent-dark); text-align: right; }
+  .bets-total { text-align: right; font-size: 0.9rem; color: var(--sub); margin-top: 6px; white-space: pre-line; }
+  .race-type {
+    border-radius: 8px; padding: 10px 14px; margin-bottom: 10px; font-size: 0.9rem;
+    border: 1px solid var(--line); background: var(--card);
+  }
+  .race-type.t-teppan { background: #eaf6ee; border-color: #bfe3cb; }
+  .race-type.t-hyojun { background: #eef4fa; border-color: #cfe0ef; }
+  .race-type.t-konsen { background: #fff3cd; border-color: #ffe08a; }
+
+  /* ===== 期待値（EV）表示 ===== */
+  .ev-line { font-size: 0.8rem; color: var(--sub); margin-top: 2px; }
+  .ev-badge {
+    display: inline-block; border-radius: 6px; font-size: 0.78rem;
+    padding: 0 6px; margin-left: 6px; border: 1px solid var(--line); white-space: nowrap;
+  }
+  .ev-badge.buy  { background: #eaf6ee; border-color: #bfe3cb; }                    /* 配色は .race-type.t-teppan を流用 */
+  .ev-badge.skip { background: #eef4fa; border-color: #cfe0ef; color: var(--sub); } /* 配色は .race-type.t-hyojun を流用 */
+
+  /* ===== 設定 ===== */
+  details.settings {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 16px; margin-top: 20px;
+  }
+  details.settings summary { cursor: pointer; font-weight: bold; font-size: 1rem; }
+  .weight-row { display: flex; align-items: center; gap: 10px; margin: 10px 0; flex-wrap: wrap; }
+  .weight-row label { width: 160px; font-size: 0.9rem; flex: none; }
+  .weight-row input[type="range"] { flex: 1; min-width: 130px; }
+  .weight-val { width: 46px; text-align: right; font-weight: bold; flex: none; }
+  .weight-total { font-weight: bold; margin-top: 8px; }
+  .weight-total.ng { color: var(--warn); }
+  .weight-total.ok { color: var(--ok); }
+
+  /* ===== 貼り付け取込 ===== */
+  details.paste-box {
+    background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    padding: 12px 16px; margin-bottom: 12px;
+  }
+  details.paste-box summary { cursor: pointer; font-weight: bold; color: var(--accent-dark); }
+  .hint-list { font-size: 0.85rem; color: var(--sub); padding-left: 20px; margin: 8px 0; }
+  #pasteArea {
+    width: 100%; font-size: 0.85rem; padding: 8px;
+    border: 1px solid var(--line); border-radius: 8px; resize: vertical;
+  }
+  .import-note {
+    font-size: 0.85rem; margin-top: 8px; white-space: pre-line;
+  }
+  .import-note.ok { color: var(--ok); }
+  .import-note.warn { color: #8a6d1a; }
+
+  /* ===== 会場・レース選択で自動入力（T-20260715-02） ===== */
+  #rlPasteArea {
+    width: 100%; font-size: 0.85rem; padding: 8px;
+    border: 1px solid var(--line); border-radius: 8px; resize: vertical;
+  }
+  .racelist-controls { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin: 10px 0; }
+  .racelist-controls label { display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; color: var(--sub); font-weight: bold; }
+  .racelist-controls select, .racelist-controls input[type="date"] {
+    font-size: 1rem; padding: 8px 10px; border: 1px solid var(--line); border-radius: 8px; background: #fff; min-width: 130px;
+  }
+  .racelist-links { display: flex; gap: 14px; flex-wrap: wrap; margin: 8px 0 2px; font-size: 0.9rem; }
+  .racelist-links a { color: var(--accent-dark); font-weight: bold; }
+  .racelist-links a[aria-disabled="true"] { color: #b3b3b3; pointer-events: none; text-decoration: none; cursor: default; }
+  #rlFile { font-size: 0.85rem; }
+  .racelist-howto {
+    background: #eef6ee; border: 1px solid #cfe4cf; border-radius: 8px;
+    padding: 8px 12px; margin: 8px 0 10px; font-size: 0.85rem; color: #33463a;
+  }
+  .racelist-howto b { color: var(--accent-dark); }
+  .racelist-howto ol { margin: 6px 0 2px; padding-left: 20px; }
+  .racelist-howto li { margin: 3px 0; }
+  .racelist-howto code { background: #dcecdc; padding: 1px 4px; border-radius: 4px; }
+
+  details.inhelp {
+    background: #f2f7fc; border: 1px solid #d3e3f1; border-radius: 8px;
+    padding: 8px 12px; margin: 10px 0;
+  }
+  details.inhelp summary { cursor: pointer; color: var(--accent-dark); font-size: 0.9rem; }
+  details.inhelp p, details.inhelp li { font-size: 0.85rem; color: var(--ink); }
+
+  footer {
+    text-align: center; font-size: 0.75rem; color: #8fa1b0;
+    padding: 24px 16px 40px;
+  }
+
+  /* スマホ最適化 */
+  @media (max-width: 480px) {
+    .rank-no { width: 46px; font-size: 1.1rem; }
+    .weight-row label { width: 100%; }
+    header h1 { font-size: 1.15rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🚤 競艇予測アプリ</h1>
+  <p>フェーズ1: ルールベース予測（データは自分で入力）</p>
+</header>
+
+<main>
+
+  <!-- ===== 入力 ===== -->
+  <section>
+    <h2>1. 選手データ入力（6艇）</h2>
+    <details class="inhelp" id="metricsHelp">
+      <summary>📖 はじめての方へ — 入力する数字のかんたん解説</summary>
+      <p>数字はすべて<b>公式サイトの出走表</b>に載っています（手で打たなくても、下の「📥 貼り付けて自動入力」が使えます）。</p>
+      <div class="table-scroll">
+      <table class="basis-table">
+        <tr><th>項目</th><th>意味</th><th>目安</th></tr>
+        <!-- 並びは入力欄・重みスライダーと同じ（重みの大きい順） -->
+        <tr><td><b>コース別1着率</b></td><td>その枠のコースから1着を取れている率</td><td>1コース平均55%・6コース平均2%。<b>貼り付け取込なら選手個人の公式実績が自動で入る</b></td></tr>
+        <tr><td><b>全国勝率</b></td><td>選手の総合的な強さ（平均着順から計算される点数）</td><td>平均≒5.5。6.5以上は全国トップ級</td></tr>
+        <tr><td><b>モーター2連率</b></td><td>抽選で当たったエンジンの調子（2着以内に入れた率）</td><td>平均≒33%。40%超は当たりモーター</td></tr>
+        <tr><td><b>当地勝率</b></td><td>このレース場だけでの勝率。全国より高ければ「得意な水面」</td><td>全国勝率と見比べる</td></tr>
+        <tr><td><b>平均ST</b></td><td>スタートの速さ（秒）。<b>小さいほど速い</b></td><td>平均≒0.16。0.14以下は俊敏</td></tr>
+        <tr><td><b>単勝オッズ</b></td><td>公式サイトのオッズページの値（任意入力）</td><td>入れると「期待値」判定が出る</td></tr>
+      </table>
+      </div>
+      <p class="basis-note">迷ったら:「📋 サンプルデータ投入」でまず試す →「📥 貼り付けて自動入力」で実データ、が簡単です。</p>
+    </details>
+    <div class="toolbar">
+      <button type="button" class="btn-sub" id="sampleBtn">📋 サンプルデータ投入</button>
+      <button type="button" class="btn-danger" id="clearBtn">🗑 入力を全部クリア</button>
+    </div>
+
+    <details class="paste-box" id="racelistBox" open>
+      <summary>🎯 会場・レースを選ぶだけで自動入力（本日の出走表データが必要）</summary>
+      <p class="hint" id="racelistStatus" style="margin:6px 0"></p>
+      <div class="racelist-howto">
+        <b>📌 今日の出走表データの入れ方</b>
+        <ol>
+          <li><b>PC</b>：<code>phase2\refresh_racelist.bat</code> をダブルクリック（自動生成→コピー→アプリ起動）。毎朝8:30にPC自動生成もされます（PC起動時のみ）</li>
+          <li><b>スマホ</b>：「ファイル」→ iCloud Drive →<b> Obsidian → 02_Projects → BoatRacePredictor </b>の <code>racelist_today.json</code> を、下の「📂 …読み込む」で<b>ファイルを選択</b>、または中身を<b>貼り付け</b></li>
+          <li>下で<b>会場・レースを選んで</b>「⬇️ この会場・レースを取り込む」を押す</li>
+        </ol>
+      </div>
+      <div class="racelist-controls">
+        <label>会場<select id="rlVenue"></select></label>
+        <label>レース<select id="rlRace"></select></label>
+        <label>日付<input type="date" id="rlDate"></label>
+      </div>
+      <div class="toolbar" style="margin-top:4px">
+        <button type="button" class="btn-primary" id="rlApplyBtn" style="width:auto;padding:10px 18px;font-size:1rem">⬇️ この会場・レースを取り込む</button>
+      </div>
+      <div class="racelist-links" id="rlLinks"></div>
+      <div class="import-note" id="rlNote"></div>
+
+      <details class="paste-box" id="rlDataBox" style="margin-top:12px;background:#f7fafc">
+        <summary>📂 本日の出走表データを読み込む（初回・日付が変わったら）</summary>
+        <ol class="hint-list">
+          <li>PCで <code>phase2\refresh_racelist.bat</code> をダブルクリック（または <code>python phase2\export_racelist.py</code>）→ プロジェクト直下に <code>racelist_today.json</code> が作られます（iPhoneは「ファイル」→ iCloud Drive → Obsidian → 02_Projects → BoatRacePredictor から選べます）</li>
+          <li><b>方法A（ファイル）</b>：下の「ファイルを選択」で <code>racelist_today.json</code> を選ぶ</li>
+          <li><b>方法B（貼り付け）</b>：ファイル選択が使えない場合、JSONの中身をコピーして下の欄に貼り付け →「JSONを読み込む」</li>
+        </ol>
+        <div class="toolbar">
+          <input type="file" id="rlFile" accept="application/json,.json">
+        </div>
+        <textarea id="rlPasteArea" rows="4" placeholder="racelist_today.json の中身を貼り付け（ファイル選択が使えない場合）"></textarea>
+        <div class="toolbar" style="margin-top:8px">
+          <button type="button" class="btn-sub" id="rlPasteBtn">⬇️ JSONを読み込む</button>
+          <button type="button" class="btn-danger" id="rlClearDataBtn">🗑 読み込んだデータを消す</button>
+        </div>
+        <div class="import-note" id="rlDataNote"></div>
+      </details>
+    </details>
+
+    <details class="paste-box" id="pasteBox">
+      <summary>📥 公式サイトの出走表から貼り付けて自動入力（おすすめ・手入力不要）</summary>
+      <ol class="hint-list">
+        <li><a href="https://www.boatrace.jp/owpc/pc/race/index" target="_blank" rel="noopener">🌐 公式サイトの本日のレース一覧を開く</a> → 予測したいレース場・レース番号の<b>出走表</b>ページへ進む</li>
+        <li>選手の表の部分を<b>文字として</b>選択してコピー（スマホ: 長押し→「すべてを選択」→コピー ／ PC: <b>Ctrl+A</b> → <b>Ctrl+C</b>）。<b>URLのコピーでは取り込めません</b>（貼るとページを開く案内が出ます）</li>
+        <li>下の枠に貼り付けて「取り込む」を押す → 6艇分が自動入力される</li>
+      </ol>
+      <textarea id="pasteArea" rows="6" placeholder="ここに出走表ページのテキストを貼り付け"></textarea>
+      <div class="toolbar" style="margin-top:8px">
+        <button type="button" class="btn-sub" id="importBtn">⬇️ 取り込む</button>
+      </div>
+      <div class="import-note" id="importNote"></div>
+    </details>
+
+    <details class="paste-box" id="oddsPasteBox">
+      <summary>📥 オッズを貼り付けて自動入力（単勝・複勝・2連単・締切前に）</summary>
+      <ol class="hint-list">
+        <li><a href="https://www.boatrace.jp/owpc/pc/race/index" target="_blank" rel="noopener">🌐 公式サイト</a> → 対象レースの<b>オッズ</b> →「<b>単勝・複勝</b>」または「<b>2連単</b>」ページを開く</li>
+        <li>ページの表を<b>文字として</b>選択してコピー（スマホ: 長押し→「すべてを選択」→コピー ／ PC: <b>Ctrl+A</b> → <b>Ctrl+C</b>）</li>
+        <li>下に貼り付けて「取り込む」→ 単勝・複勝が自動入力（<b>複勝は下限</b>）。<b>2連単</b>ページを貼れば2連単EVも出ます（<b>粗い参考</b>）。ページごとに貼り直しでOK</li>
+      </ol>
+      <textarea id="oddsPasteArea" rows="6" placeholder="ここにオッズページ（単勝・複勝）のテキストを貼り付け"></textarea>
+      <div class="toolbar" style="margin-top:8px">
+        <button type="button" class="btn-sub" id="oddsImportBtn">⬇️ 取り込む</button>
+      </div>
+      <div class="import-note" id="oddsImportNote"></div>
+    </details>
+
+    <div class="boats-grid" id="boats"></div>
+
+    <div class="budget-box">
+      <label for="budget">💴 1レースの掛け金（予算）</label>
+      <div>
+        <input type="number" id="budget" min="100" step="100" value="1000"> 円
+      </div>
+      <span class="hint">100円単位。買い目に自動で配分されます</span>
+    </div>
+
+    <button type="button" class="btn-primary" id="predictBtn">🔮 予測する</button>
+    <div class="error-box" id="errorBox"></div>
+  </section>
+
+  <!-- ===== 結果 ===== -->
+  <section id="resultSection" hidden>
+    <h2>2. 予測結果</h2>
+    <details class="inhelp">
+      <summary>📖 結果画面の見方 — 用語のかんたん解説</summary>
+      <div class="table-scroll">
+      <table class="basis-table">
+        <tr><th>用語</th><th>意味</th></tr>
+        <tr><td><b>信頼度%</b></td><td>アプリの自信度。6艇の合計が100%になる相対値で、数字が大きいほど「この艇が勝ちそう」という予測が強気</td></tr>
+        <tr><td><b>⚡接戦</b></td><td>1位と2位の信頼度の差が<b>3%未満</b>。どちらが勝ってもおかしくない状態 → 2連単は2点に分散して備える</td></tr>
+        <tr><td><b>🔒鉄板レース</b></td><td>予測1位の信頼度が<b>40%以上</b>。本命がはっきりしている → 単勝と対抗の複勝を軸に、2連単で上乗せを狙う買い方</td></tr>
+        <tr><td><b>⚖️標準レース</b></td><td>信頼度<b>25〜40%</b>。ほどほどの本命 → 単勝＋複勝2点で手堅く、2連単は絞る買い方</td></tr>
+        <tr><td><b>🌀混戦レース</b></td><td>1位でも信頼度<b>25%未満</b>。予測が割れている → <b>見送りが第一候補</b>。買うなら当たりやすい複勝のみ・予算は自動で半分に減額</td></tr>
+        <tr><td><b>推定的中率</b></td><td>その買い目が当たる確率の概算（信頼度から計算）。<b>掛け金はこれに比例して配分</b>される（当たりやすい券に多く）</td></tr>
+        <tr><td><b>期待値</b></td><td>較正済み勝率×オッズ。<b>1.2以上</b>なら「割に合う賭け」＝🟢買い、未満は⚪見送り（単勝オッズを入力すると表示）</td></tr>
+        <tr><td><b>📖 計算根拠</b></td><td>各艇のタップで開く内訳表。「どの指標が何点稼いでこの順位になったか」はここで確認</td></tr>
+      </table>
+      </div>
+      <p class="basis-note">⚠️ 信頼度は「当たりやすさ」の目安。単勝オッズを入力すると「儲かるか」の期待値判定が表示されます。掛け金の配分自体はオッズ未考慮（配分への反映はフェーズ3.2で対応予定）。</p>
+    </details>
+    <div id="ranking"></div>
+
+    <h2>3. おすすめ買い目（掛け金配分）</h2>
+    <div class="race-type" id="raceTypeBanner"></div>
+    <div class="table-scroll"><table class="bets-table" id="betsTable"></table></div>
+    <div class="bets-total" id="betsTotal"></div>
+  </section>
+
+  <!-- ===== 設定 ===== -->
+  <details class="settings" id="settingsBox">
+    <summary>⚙️ 設定（重み調整・イン有利補正）</summary>
+    <p class="hint">スコア = 各指標（6艇の中での相対値 0〜1）× 重み の合計に、イン有利補正を混ぜたもの。重みの合計は必ず100%にしてください。</p>
+    <div id="metricsHelpSlot"></div><!-- かんたん解説の複製がここに入る（JSで生成） -->
+    <div id="weightRows"></div>
+    <div class="weight-total" id="weightTotal"></div>
+    <div class="weight-row" style="margin-top:16px">
+      <label for="alphaRange">イン有利補正の強さ</label>
+      <input type="range" id="alphaRange" min="0" max="100" step="5">
+      <span class="weight-val" id="alphaVal"></span>
+    </div>
+    <details class="inhelp">
+      <summary>❓「イン有利補正」とは？</summary>
+      <p>競艇は<b>スタート位置（コース）による有利・不利がとても大きい</b>競技です。全国平均の1着率はおよそ：</p>
+      <p style="text-align:center"><b>1コース 55%</b> ／ 2コース 14% ／ 3コース 12% ／ 4コース 10% ／ 5コース 6% ／ 6コース 2%</p>
+      <p>1コース（イン）は第1ターンマークを内側から先に回れるため「イン逃げ」で圧倒的に勝ちやすく、逆に6コースはどんな強い選手でもなかなか勝てません。選手の勝率やモーターだけでは<b>この枠順の有利さが反映されない</b>ので、コースごとの平均勝率をスコアに混ぜているのがこの補正です。</p>
+      <p>▼ スライダーの意味（最終スコア = 選手データ×(100−補正)% ＋ コースの有利さ×補正%）</p>
+      <ul>
+        <li><b>0%</b> … 補正なし。純粋に選手データだけで予測（枠順を無視）</li>
+        <li><b>30%（初期値）</b> … 選手データを主役に、枠の現実味を加える推奨バランス</li>
+        <li><b>100%</b> … 選手を無視して枠順どおり。ほぼ毎回1号艇が1位になる</li>
+      </ul>
+    </details>
+    <button type="button" class="btn-sub" id="resetBtn">↩️ 重み・補正を初期値に戻す</button>
+    <button type="button" class="btn-primary" id="repredictBtn">🔮 この設定で再予測（結果へ戻る）</button>
+  </details>
+
+  <footer>
+    ⚠️ 本アプリの予測は入力データに基づく統計的な参考情報であり、的中を保証するものではありません。<br>
+    舟券の購入は20歳以上・余裕資金の範囲で。 | BoatRacePredictor Phase 1
+  </footer>
+</main>
+
+<script>
+"use strict";
+
+/* =========================================================
+   定数定義
+========================================================= */
+// 指標の定義（key・表示名・入力範囲・小さいほど良いか）
+const METRICS = [
+  { key: "course", label: "コース別1着率", unit: "%",  min: 0,    max: 100, step: 0.1,  invert: false, defWeight: 40, avg: "", ph: "55.0" },
+  { key: "nat",    label: "全国勝率",       unit: "",   min: 0,    max: 10,  step: 0.01, invert: false, defWeight: 25, avg: "5.5", ph: "5.50" },
+  { key: "motor",  label: "モーター2連率", unit: "%",  min: 0,    max: 100, step: 0.1,  invert: false, defWeight: 20, avg: "33", ph: "33.0" },
+  { key: "local",  label: "当地勝率",       unit: "",   min: 0,    max: 10,  step: 0.01, invert: false, defWeight: 10, avg: "5.5", ph: "5.50" },
+  { key: "st",     label: "平均ST",         unit: "秒", min: 0.01, max: 1,   step: 0.01, invert: true,  defWeight: 5,  avg: "0.16", ph: "0.16" },
+];
+
+// コース別の全国平均1着率（イン有利補正の基準）
+const COURSE_AVG_WIN = [0.55, 0.14, 0.12, 0.10, 0.06, 0.02];
+const DEFAULT_ALPHA = 30; // イン有利補正の強さ初期値（%）
+
+// 枠番の公式カラー（1白 2黒 3赤 4青 5黄 6緑）
+const LANE_COLORS = [
+  { bg: "#ffffff", fg: "#333333" },
+  { bg: "#222222", fg: "#ffffff" },
+  { bg: "#e5372e", fg: "#ffffff" },
+  { bg: "#2b6cb0", fg: "#ffffff" },
+  { bg: "#f2c500", fg: "#333333" },
+  { bg: "#2e9e4f", fg: "#ffffff" },
+];
+
+// サンプルデータ（典型的なイン優勢のレースを想定。odds=単勝・placeOdds=複勝オッズ下限の例）
+const SAMPLE = [
+  { name: "山田 太郎", nat: 6.80, local: 7.10, motor: 38.5, course: 55.2, st: 0.14, odds: 1.5, placeOdds: 1.0 },
+  { name: "佐藤 次郎", nat: 5.90, local: 5.50, motor: 34.0, course: 16.8, st: 0.16, odds: 8.2, placeOdds: 2.5 },
+  { name: "鈴木 三郎", nat: 6.20, local: 6.00, motor: 40.1, course: 12.5, st: 0.15, odds: 5.4, placeOdds: 1.8 },
+  { name: "高橋 四郎", nat: 5.40, local: 5.20, motor: 30.2, course: 10.3, st: 0.17, odds: 12.6, placeOdds: 3.0 },
+  { name: "伊藤 五郎", nat: 4.80, local: 4.50, motor: 28.8, course:  7.9, st: 0.18, odds: 25.3, placeOdds: 4.5 },
+  { name: "渡辺 六郎", nat: 4.20, local: 3.90, motor: 25.4, course:  2.1, st: 0.19, odds: 48.9, placeOdds: 6.0 },
+];
+
+const STORAGE_KEY = "boatrace-predictor-v1";
+const RACELIST_KEY = "boatrace-racelist-v1"; // アップロード/貼り付けした当日出走表データ（別キー・欠損時は空扱い）
+const CLOSE_RACE_GAP = 3.0; // 1位と2位の信頼度差がこの%未満なら「接戦」
+
+// 会場コード(01〜24)→会場名。PC側 phase2/jcd_names.py と同一（会場プルダウン用）
+const JCD_NAMES = { "01":"桐生","02":"戸田","03":"江戸川","04":"平和島","05":"多摩川","06":"浜名湖","07":"蒲郡","08":"常滑","09":"津","10":"三国","11":"びわこ","12":"住之江","13":"尼崎","14":"鳴門","15":"丸亀","16":"児島","17":"宮島","18":"徳山","19":"下関","20":"若松","21":"芦屋","22":"福岡","23":"唐津","24":"大村" };
+
+// publish時に build_publish.py が当日 racelist_today.json をマーカー間へ注入する（埋め込み既定）。
+// 未注入（開発中の素の index.html）は null のまま＝埋め込みデータ無し＝現行動作（回帰）。
+const RACELIST_EMBEDDED = /*RACELIST_START*/null/*RACELIST_END*/;
+
+/* =========================================================
+   スコア→実勝率の較正表と期待値（EV）
+   設計: 20_設計/08_フェーズ3_期待値戦略設計.md（EV = 較正済み勝率 × オッズ・閾値1.2）
+   生成元: phase2/data/calibration.json（calibrate.py・2026-07-11 生成・
+           〜2026-07-09 の 54,923 レースで較正・ビン幅 2.5pt・単調化済み）
+   ※EVは「表示と注記」のみ。予測・金額配分には使わない（フェーズ3.2で判断）
+========================================================= */
+const CALIBRATION = [
+  { lo:  0.0, hi:  20.0, win: 0.2222, top2: 0.6667 },
+  { lo: 20.0, hi:  22.5, win: 0.2163, top2: 0.4349 },
+  { lo: 22.5, hi:  25.0, win: 0.3106, top2: 0.5135 },
+  { lo: 25.0, hi:  27.5, win: 0.3581, top2: 0.5621 },
+  { lo: 27.5, hi:  30.0, win: 0.4370, top2: 0.6336 },
+  { lo: 30.0, hi:  32.5, win: 0.5113, top2: 0.7044 },
+  { lo: 32.5, hi:  35.0, win: 0.5929, top2: 0.7652 },
+  { lo: 35.0, hi:  37.5, win: 0.6633, top2: 0.8210 },
+  { lo: 37.5, hi:  40.0, win: 0.7063, top2: 0.8479 },
+  { lo: 40.0, hi:  42.5, win: 0.7424, top2: 0.8708 },
+  { lo: 42.5, hi:  45.0, win: 0.7816, top2: 0.8918 },
+  { lo: 45.0, hi:  47.5, win: 0.8030, top2: 0.9091 },
+  { lo: 47.5, hi:  50.0, win: 0.8111, top2: 0.9222 },
+  { lo: 50.0, hi: 100.0, win: 0.8649, top2: 0.9459 },
+];
+const EV_THRESHOLD = 1.2; // これ以上なら「割に合う賭け」＝🟢買い
+
+// conf（信頼度%）を較正表のビンで実際の率（割合0〜1）へ変換。範囲外は端のビンを使う
+function calBin(conf) {
+  if (conf <= CALIBRATION[0].lo) return CALIBRATION[0];
+  for (const b of CALIBRATION) {
+    if (conf >= b.lo && conf < b.hi) return b;
+  }
+  return CALIBRATION[CALIBRATION.length - 1];
+}
+function calWin(conf)  { return calBin(conf).win;  } // 較正済み1着率
+function calTop2(conf) { return calBin(conf).top2; } // 較正済み2着以内率
+
+// 単勝オッズ入力の取得（1.0以上の有効値のみ・未入力/不正は null）
+function getOdds(laneIdx) {
+  const s = (state.boats[laneIdx].odds ?? "").toString().trim();
+  const n = Number(s);
+  return s !== "" && !Number.isNaN(n) && n >= 1 ? n : null;
+}
+
+// 複勝オッズ入力の取得（レンジ下限・1.0以上の有効値のみ・未入力/不正は null）
+function getPlaceOdds(laneIdx) {
+  const s = (state.boats[laneIdx].placeOdds ?? "").toString().trim();
+  const n = Number(s);
+  return s !== "" && !Number.isNaN(n) && n >= 1 ? n : null;
+}
+
+// 期待値バッジ（EV_THRESHOLD 以上で🟢買い・未満で⚪見送り）
+function evBadge(ev) {
+  return ev >= EV_THRESHOLD
+    ? ` <span class="ev-badge buy">🟢買い</span>`
+    : ` <span class="ev-badge skip">⚪見送り</span>`;
+}
+
+// 2連単オッズの取得（target "i-j" → state.exactaOdds のオッズ・無ければ null）
+function getExactaOdds(target) {
+  const o = (state.exactaOdds || {})[target];
+  const n = Number(o);
+  return o != null && !Number.isNaN(n) && n >= 1 ? n : null;
+}
+
+/* =========================================================
+   状態（localStorage に保存・復元）
+========================================================= */
+let state = {
+  boats: Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" })),
+  weights: Object.fromEntries(METRICS.map(m => [m.key, m.defWeight])),
+  alpha: DEFAULT_ALPHA,
+  budget: 1000,
+  exactaOdds: {},   // 2連単オッズ { "i-j": odds }（貼り付けで自動入力）
+};
+
+function saveState() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (e) {
+    console.warn("保存に失敗しました", e);
+  }
+}
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const s = JSON.parse(raw);
+    if (s && Array.isArray(s.boats) && s.boats.length === 6) state.boats = s.boats;
+    if (s && s.weights) state.weights = { ...state.weights, ...s.weights };
+    if (s && typeof s.alpha === "number") state.alpha = s.alpha;
+    if (s && typeof s.budget === "number") state.budget = s.budget;
+    if (s && s.exactaOdds && typeof s.exactaOdds === "object") state.exactaOdds = s.exactaOdds;
+  } catch (e) {
+    console.warn("保存データの読み込みに失敗しました", e);
+  }
+}
+
+/* =========================================================
+   入力フォーム生成
+========================================================= */
+function buildBoatCards() {
+  const wrap = document.getElementById("boats");
+  wrap.innerHTML = "";
+  for (let i = 0; i < 6; i++) {
+    const c = LANE_COLORS[i];
+    const card = document.createElement("div");
+    card.className = "boat-card";
+    card.innerHTML = `
+      <div class="boat-head">
+        <span class="lane-chip" style="background:${c.bg};color:${c.fg}">${i + 1}</span>
+        <input type="text" data-boat="${i}" data-field="name" placeholder="選手名（任意）" maxlength="20">
+      </div>
+      ${METRICS.map(m => `
+        <div class="field-row">
+          <label>${m.label}<span class="hint">（${m.min}〜${m.max}${m.unit}${m.avg ? "・平均" + m.avg : ""}）</span></label>
+          <input type="number" inputmode="decimal" data-boat="${i}" data-field="${m.key}"
+                 min="${m.min}" max="${m.max}" step="${m.step}" placeholder="例 ${m.ph}">
+        </div>`).join("")}
+      <div class="field-row">
+        <label>単勝オッズ<span class="hint">（任意・1.0〜999）</span></label>
+        <input type="number" inputmode="decimal" data-boat="${i}" data-field="odds"
+               min="1" max="999" step="0.1" placeholder="例 3.2">
+      </div>
+      <div class="field-row">
+        <label>複勝オッズ<span class="hint">（任意・下限・1.0〜999）</span></label>
+        <input type="number" inputmode="decimal" data-boat="${i}" data-field="placeOdds"
+               min="1" max="999" step="0.1" placeholder="例 1.2">
+      </div>
+    `;
+    wrap.appendChild(card);
+  }
+}
+
+function fillFormFromState() {
+  document.querySelectorAll("#boats input").forEach(inp => {
+    const b = Number(inp.dataset.boat);
+    const f = inp.dataset.field;
+    inp.value = state.boats[b][f] ?? "";
+    inp.classList.remove("invalid");
+  });
+  document.getElementById("budget").value = state.budget;
+}
+
+/* =========================================================
+   設定画面（重みスライダー）
+========================================================= */
+function buildSettings() {
+  const wrap = document.getElementById("weightRows");
+  wrap.innerHTML = "";
+  METRICS.forEach(m => {
+    const row = document.createElement("div");
+    row.className = "weight-row";
+    row.innerHTML = `
+      <label for="w_${m.key}">${m.label}</label>
+      <input type="range" id="w_${m.key}" min="0" max="100" step="5" data-weight="${m.key}">
+      <span class="weight-val" id="wv_${m.key}"></span>
+    `;
+    wrap.appendChild(row);
+  });
+  refreshSettingsUI();
+}
+
+function refreshSettingsUI() {
+  METRICS.forEach(m => {
+    document.getElementById(`w_${m.key}`).value = state.weights[m.key];
+    document.getElementById(`wv_${m.key}`).textContent = state.weights[m.key] + "%";
+  });
+  const total = weightTotal();
+  const el = document.getElementById("weightTotal");
+  el.textContent = `重みの合計: ${total}% ${total === 100 ? "✔ OK" : "（100%にしてください）"}`;
+  el.className = "weight-total " + (total === 100 ? "ok" : "ng");
+  document.getElementById("alphaRange").value = state.alpha;
+  document.getElementById("alphaVal").textContent = state.alpha + "%";
+}
+
+function weightTotal() {
+  return METRICS.reduce((s, m) => s + Number(state.weights[m.key]), 0);
+}
+
+/* =========================================================
+   バリデーション
+========================================================= */
+function validateInputs() {
+  const errors = [];
+  let firstBad = null;
+  document.querySelectorAll('#boats input[type="number"]').forEach(inp => inp.classList.remove("invalid"));
+
+  for (let i = 0; i < 6; i++) {
+    for (const m of METRICS) {
+      const inp = document.querySelector(`#boats input[data-boat="${i}"][data-field="${m.key}"]`);
+      const v = inp.value.trim();
+      const num = Number(v);
+      if (v === "" || Number.isNaN(num) || num < m.min || num > m.max) {
+        inp.classList.add("invalid");
+        if (!firstBad) firstBad = inp;
+        errors.push(`${i + 1}号艇の「${m.label}」を ${m.min}〜${m.max}${m.unit} の範囲で入力してください`);
+      }
+    }
+    // 単勝オッズは任意入力: 空欄はOK。入力がある場合のみ 1.0〜999 かをチェック
+    const oddsInp = document.querySelector(`#boats input[data-boat="${i}"][data-field="odds"]`);
+    const ov = oddsInp.value.trim();
+    if (ov !== "") {
+      const onum = Number(ov);
+      if (Number.isNaN(onum) || onum < 1 || onum > 999) {
+        oddsInp.classList.add("invalid");
+        if (!firstBad) firstBad = oddsInp;
+        errors.push(`${i + 1}号艇の「単勝オッズ」は空欄にするか 1.0〜999 で入力してください`);
+      }
+    }
+    // 複勝オッズも任意入力: 空欄OK・入力時のみ 1.0〜999（レンジ下限）
+    const pOddsInp = document.querySelector(`#boats input[data-boat="${i}"][data-field="placeOdds"]`);
+    const pov = pOddsInp.value.trim();
+    if (pov !== "") {
+      const pnum = Number(pov);
+      if (Number.isNaN(pnum) || pnum < 1 || pnum > 999) {
+        pOddsInp.classList.add("invalid");
+        if (!firstBad) firstBad = pOddsInp;
+        errors.push(`${i + 1}号艇の「複勝オッズ」は空欄にするか 1.0〜999 で入力してください`);
+      }
+    }
+  }
+
+  const budget = Number(document.getElementById("budget").value);
+  if (Number.isNaN(budget) || budget < 100) {
+    errors.push("掛け金は100円以上で入力してください");
+  } else if (budget % 100 !== 0) {
+    errors.push("掛け金は100円単位で入力してください");
+  }
+
+  if (weightTotal() !== 100) {
+    errors.push(`重みの合計が ${weightTotal()}% です。設定画面で合計100%に調整してください`);
+  }
+
+  return { errors, firstBad };
+}
+
+function showErrors(errors) {
+  const box = document.getElementById("errorBox");
+  if (errors.length === 0) {
+    box.className = "error-box";
+    box.textContent = "";
+  } else {
+    box.className = "error-box show";
+    box.textContent = "⚠ 入力を確認してください\n・" + errors.slice(0, 6).join("\n・")
+      + (errors.length > 6 ? `\n…ほか ${errors.length - 6} 件` : "");
+  }
+}
+
+/* =========================================================
+   出走表の貼り付け取込（公式サイトのコピー＆ペーストを解析）
+   構造: 登録番号/級別 → 選手名 → 支部/出身地 → 年齢/体重 →
+         F数 L数 平均ST → 全国(勝率 2連率 3連率) → 当地(同) →
+         モーター(No 2連率 3連率) → ボート(No 2連率 3連率)
+========================================================= */
+// コース別1着率の補完値（コース全国平均・%）。個人実績が無い選手のフォールバック
+const COURSE_AVG_FILL = COURSE_AVG_WIN.map(r => Math.round(r * 1000) / 10);
+
+// 選手個人のコース別1着率対照表（公式レーサー期別成績から build_racer_table.py が生成・埋め込む）
+// 形式: { "登番": [1コース%, 2コース%, …, 6コース%]（進入5回未満のコースは null） }
+const RACER_TABLE_TERM = "fan2510";
+const RACER_COURSE_WIN = /*RCW_START*/{"2538":[6.7,0.0,0.0,0.0,0.0,0.0],"2878":[47.6,26.3,3.6,4.3,0.0,0.0],"3024":[56.8,23.1,0.0,null,null,null],"3054":[52.9,7.1,8.3,11.1,0.0,0.0],"3070":[30.0,7.1,5.6,0.0,null,null],"3072":[31.0,2.7,0.0,null,null,null],"3075":[42.1,5.0,4.3,4.5,0.0,0.0],"3081":[40.0,41.7,7.7,0.0,5.6,0.0],"3105":[38.9,15.8,4.3,5.9,0.0,0.0],"3107":[42.9,0.0,0.0,0.0,5.9,0.0],"3156":[27.8,6.7,4.2,0.0,null,0.0],"3158":[50.0,11.8,21.7,11.5,5.3,0.0],"3159":[50.0,10.8,null,null,null,null],"3161":[25.0,11.1,12.9,0.0,0.0,null],"3175":[0.0,12.5,0.0,14.3,0.0,0.0],"3176":[35.3,15.0,0.0,5.0,0.0,7.1],"3202":[33.3,5.9,6.7,0.0,0.0,0.0],"3207":[0.0,0.0,16.7,9.1,8.3,0.0],"3211":[6.2,5.0,4.5,0.0,0.0,0.0],"3212":[21.4,0.0,7.1,10.0,12.5,0.0],"3224":[35.7,5.3,4.8,0.0,0.0,0.0],"3226":[35.0,0.0,5.9,4.3,0.0,0.0],"3232":[50.0,5.6,5.0,0.0,5.9,7.7],"3233":[33.3,13.6,4.3,6.7,5.0,0.0],"3246":[22.2,7.1,0.0,6.2,0.0,null],"3251":[51.7,8.3,13.8,9.5,5.0,8.7],"3256":[56.0,33.3,26.1,6.7,12.0,0.0],"3257":[57.9,24.5,7.7,null,null,null],"3265":[43.6,15.2,null,null,null,null],"3268":[46.2,10.5,0.0,0.0,0.0,null],"3277":[26.3,9.5,4.2,6.7,6.2,0.0],"3282":[33.3,0.0,0.0,0.0,0.0,0.0],"3284":[40.0,11.1,9.1,6.7,0.0,0.0],"3286":[41.7,7.1,11.1,15.4,7.7,0.0],"3289":[13.3,20.0,0.0,0.0,0.0,0.0],"3293":[20.0,0.0,0.0,0.0,0.0,0.0],"3294":[35.3,18.8,4.8,7.1,11.8,0.0],"3297":[28.6,6.5,8.3,12.5,null,null],"3300":[80.0,13.6,17.6,8.0,5.9,0.0],"3302":[18.2,16.7,0.0,16.7,0.0,0.0],"3303":[26.3,4.5,5.9,0.0,0.0,0.0],"3304":[72.7,16.7,14.3,4.5,5.9,0.0],"3305":[47.1,11.1,0.0,0.0,0.0,0.0],"3306":[21.4,0.0,6.7,0.0,0.0,0.0],"3313":[23.5,0.0,13.3,5.9,0.0,0.0],"3315":[10.0,18.2,0.0,0.0,0.0,0.0],"3319":[16.7,0.0,16.7,5.3,0.0,0.0],"3327":[50.0,9.5,7.1,21.9,0.0,null],"3333":[50.0,10.7,17.4,9.5,0.0,0.0],"3334":[63.2,16.7,9.5,4.5,0.0,0.0],"3339":[20.0,0.0,16.7,10.5,0.0,7.7],"3340":[40.0,9.1,0.0,6.7,5.0,0.0],"3346":[25.0,13.3,0.0,12.5,0.0,7.1],"3349":[44.4,23.5,8.7,16.0,20.0,null],"3350":[66.7,13.3,31.6,10.5,5.3,0.0],"3352":[null,null,null,null,null,3.0],"3353":[16.7,12.5,11.1,0.0,11.1,0.0],"3355":[0.0,0.0,12.5,0.0,0.0,null],"3357":[23.1,5.9,0.0,0.0,0.0,0.0],"3361":[8.3,6.7,0.0,0.0,0.0,0.0],"3362":[43.5,13.6,9.1,4.8,null,null],"3370":[61.5,0.0,0.0,0.0,0.0,0.0],"3372":[9.1,0.0,0.0,0.0,0.0,0.0],"3377":[7.7,7.7,6.2,7.7,5.9,0.0],"3381":[30.0,0.0,13.6,24.0,0.0,0.0],"3385":[52.4,5.6,0.0,5.6,0.0,7.1],"3388":[72.7,20.0,9.1,19.4,5.0,11.1],"3391":[null,null,null,null,null,null],"3392":[25.0,0.0,0.0,0.0,0.0,0.0],"3401":[25.0,12.5,0.0,0.0,9.1,0.0],"3406":[37.5,4.8,19.0,15.8,4.5,0.0],"3411":[31.2,5.9,0.0,6.7,0.0,0.0],"3412":[69.2,15.8,8.3,15.4,16.7,4.0],"3414":[46.2,8.3,6.2,7.7,0.0,0.0],"3415":[64.0,22.2,4.0,9.1,0.0,0.0],"3419":[null,null,null,null,null,null],"3422":[79.3,10.0,33.3,39.4,10.5,0.0],"3430":[33.3,19.0,9.5,4.2,5.3,0.0],"3432":[30.0,5.3,0.0,4.0,0.0,0.0],"3434":[38.9,0.0,6.7,5.6,10.5,0.0],"3435":[65.6,15.8,10.0,18.5,4.3,0.0],"3436":[63.2,21.1,9.5,14.3,10.0,0.0],"3439":[55.0,20.0,23.5,16.7,11.8,5.6],"3441":[20.0,0.0,9.5,0.0,0.0,0.0],"3442":[35.3,0.0,4.5,0.0,0.0,0.0],"3444":[0.0,0.0,23.1,6.7,7.7,0.0],"3445":[28.6,14.3,0.0,12.5,10.5,7.1],"3448":[23.5,5.0,0.0,0.0,6.2,0.0],"3454":[31.2,6.2,5.0,0.0,10.5,0.0],"3455":[35.7,20.0,6.2,6.7,0.0,0.0],"3458":[23.1,5.0,5.0,5.3,0.0,0.0],"3459":[14.3,0.0,0.0,25.0,0.0,0.0],"3461":[42.9,9.1,0.0,8.3,0.0,0.0],"3463":[6.7,0.0,7.1,0.0,0.0,0.0],"3467":[30.8,6.2,6.2,0.0,0.0,0.0],"3470":[40.0,6.2,40.0,0.0,8.3,0.0],"3471":[30.8,5.3,12.5,0.0,0.0,0.0],"3473":[49.1,16.4,0.0,null,null,null],"3474":[21.1,10.5,0.0,5.3,0.0,0.0],"3475":[40.0,5.6,8.7,15.0,5.9,0.0],"3477":[18.8,0.0,0.0,0.0,0.0,0.0],"3478":[57.9,9.1,0.0,0.0,5.3,0.0],"3482":[45.5,16.7,8.7,4.0,14.3,4.2],"3484":[52.9,15.4,6.7,5.9,0.0,0.0],"3489":[53.3,12.5,11.1,4.0,0.0,7.1],"3497":[56.2,5.6,6.2,5.6,5.9,0.0],"3499":[77.4,22.7,17.2,7.7,0.0,0.0],"3502":[37.5,11.1,12.5,8.3,0.0,null],"3503":[41.2,10.5,5.3,15.8,0.0,0.0],"3505":[34.8,0.0,9.1,4.8,9.5,0.0],"3507":[25.0,0.0,0.0,0.0,0.0,null],"3508":[26.3,5.0,8.3,8.3,0.0,0.0],"3509":[8.3,0.0,6.2,0.0,0.0,0.0],"3514":[72.2,25.0,15.0,6.7,10.0,0.0],"3516":[26.3,0.0,16.7,0.0,7.1,0.0],"3517":[57.1,8.0,14.3,6.7,5.0,0.0],"3518":[0.0,0.0,0.0,15.4,0.0,0.0],"3519":[53.3,5.0,0.0,4.8,0.0,0.0],"3523":[16.7,7.7,0.0,0.0,0.0,0.0],"3527":[47.8,9.5,10.0,4.8,0.0,5.0],"3528":[21.4,6.7,20.0,5.9,0.0,0.0],"3532":[59.3,31.7,17.2,5.6,null,null],"3535":[46.2,11.1,4.8,15.0,0.0,0.0],"3538":[13.3,15.4,6.7,5.6,0.0,0.0],"3539":[35.3,6.2,4.5,10.0,9.1,0.0],"3541":[55.6,33.3,25.0,11.1,0.0,12.5],"3542":[30.0,5.9,0.0,0.0,null,null],"3543":[56.2,16.7,18.8,0.0,5.6,0.0],"3544":[0.0,0.0,null,12.5,0.0,null],"3546":[23.5,0.0,5.0,8.7,0.0,10.0],"3548":[48.1,18.2,0.0,13.0,11.1,0.0],"3550":[55.0,15.8,17.9,15.4,11.1,0.0],"3551":[18.2,7.1,7.1,0.0,0.0,0.0],"3554":[81.6,14.3,18.9,12.2,16.7,null],"3556":[81.1,16.0,9.1,29.2,8.3,6.7],"3557":[66.7,8.7,12.9,20.6,15.8,0.0],"3558":[68.8,10.0,15.0,7.1,0.0,0.0],"3562":[53.3,16.1,5.3,17.2,13.3,0.0],"3563":[54.2,9.1,17.2,8.7,7.7,null],"3564":[28.6,13.3,20.0,0.0,5.3,0.0],"3566":[26.7,13.6,11.1,4.2,6.7,0.0],"3567":[53.8,0.0,0.0,16.7,0.0,0.0],"3568":[33.3,5.9,5.3,12.5,7.1,0.0],"3569":[27.3,14.3,4.5,4.5,10.5,0.0],"3572":[44.4,20.0,30.4,4.3,5.3,0.0],"3574":[81.0,21.8,8.0,null,null,null],"3576":[47.8,20.0,13.3,6.7,11.8,0.0],"3577":[46.7,0.0,6.2,30.8,0.0,4.3],"3578":[25.0,12.5,0.0,10.5,0.0,0.0],"3579":[69.2,21.4,5.9,15.4,0.0,0.0],"3580":[36.8,0.0,11.8,7.1,0.0,7.1],"3581":[29.4,10.0,0.0,0.0,4.5,0.0],"3582":[50.0,15.6,15.6,20.0,null,null],"3583":[7.1,0.0,0.0,0.0,0.0,0.0],"3584":[25.0,4.2,5.0,18.8,13.0,0.0],"3587":[31.2,10.0,4.8,5.9,0.0,0.0],"3589":[25.0,9.5,0.0,6.7,0.0,0.0],"3590":[64.7,20.0,27.6,11.1,21.1,7.7],"3591":[0.0,0.0,9.1,9.1,0.0,0.0],"3596":[35.7,11.1,0.0,0.0,0.0,0.0],"3600":[42.9,0.0,0.0,11.1,null,0.0],"3602":[41.2,17.6,0.0,13.3,11.1,5.6],"3604":[23.1,5.3,12.5,9.1,0.0,0.0],"3605":[28.6,0.0,0.0,16.7,0.0,0.0],"3606":[51.9,26.3,15.8,0.0,5.3,0.0],"3611":[45.5,12.5,11.1,0.0,5.6,0.0],"3612":[51.4,13.9,13.3,18.8,0.0,0.0],"3613":[62.5,55.6,15.2,8.3,5.9,0.0],"3614":[36.8,0.0,19.0,5.9,0.0,5.9],"3615":[38.9,4.0,4.0,8.7,4.5,0.0],"3616":[50.0,6.2,17.4,11.8,6.2,0.0],"3617":[40.0,0.0,10.0,8.7,0.0,0.0],"3618":[69.6,18.8,15.0,21.1,5.6,6.7],"3619":[47.6,12.0,10.0,13.3,0.0,5.0],"3620":[46.7,4.8,5.9,5.0,0.0,0.0],"3621":[59.1,0.0,4.5,4.8,0.0,0.0],"3623":[73.5,18.7,30.8,null,null,null],"3627":[40.0,4.0,7.1,12.5,7.7,0.0],"3629":[59.3,4.2,18.5,11.1,11.1,0.0],"3630":[25.0,14.3,0.0,0.0,0.0,0.0],"3631":[37.5,0.0,0.0,0.0,0.0,0.0],"3635":[33.3,5.6,29.4,0.0,4.5,0.0],"3637":[18.8,11.8,4.5,11.1,0.0,0.0],"3641":[45.8,13.6,15.8,26.1,5.3,0.0],"3642":[27.3,0.0,15.4,0.0,11.1,0.0],"3643":[39.1,6.2,4.8,12.5,0.0,0.0],"3644":[null,null,null,null,null,null],"3645":[12.5,15.4,11.1,0.0,0.0,0.0],"3647":[6.7,0.0,6.2,13.3,11.1,0.0],"3652":[33.3,0.0,0.0,13.3,0.0,0.0],"3653":[35.7,5.9,0.0,7.7,0.0,0.0],"3654":[65.4,23.8,0.0,43.5,23.8,0.0],"3655":[64.3,0.0,21.7,0.0,5.3,0.0],"3656":[31.2,0.0,4.3,8.7,9.5,0.0],"3659":[35.7,0.0,8.3,18.2,4.8,0.0],"3660":[21.4,0.0,0.0,0.0,0.0,0.0],"3661":[38.1,12.5,0.0,0.0,4.0,0.0],"3662":[38.5,5.6,20.0,13.0,10.0,4.8],"3663":[52.4,13.0,4.2,13.6,4.5,0.0],"3664":[66.7,34.8,11.1,11.1,0.0,0.0],"3679":[92.3,20.0,5.0,13.8,0.0,0.0],"3680":[33.3,4.2,13.3,0.0,0.0,0.0],"3681":[47.1,33.3,6.2,19.0,5.9,0.0],"3684":[62.5,15.0,10.5,4.0,10.0,0.0],"3685":[26.3,5.0,12.0,12.0,0.0,0.0],"3686":[50.0,4.5,15.0,14.3,4.5,0.0],"3687":[40.0,0.0,9.1,4.0,null,null],"3690":[46.7,0.0,11.1,8.0,5.9,0.0],"3692":[53.3,0.0,18.8,18.2,20.0,0.0],"3696":[15.8,0.0,10.0,0.0,8.3,0.0],"3699":[28.6,12.5,6.2,23.8,7.7,0.0],"3701":[33.3,0.0,0.0,11.1,11.1,0.0],"3703":[48.0,28.6,8.7,4.8,5.9,0.0],"3704":[21.4,5.6,5.9,6.2,0.0,0.0],"3708":[42.1,4.5,10.5,7.7,4.3,0.0],"3710":[26.7,11.1,10.5,4.0,5.0,0.0],"3711":[56.2,10.7,9.4,10.0,15.0,0.0],"3712":[72.2,5.0,4.0,4.5,4.8,0.0],"3713":[62.5,33.3,18.8,23.8,6.7,0.0],"3714":[44.4,22.2,15.0,6.7,4.5,0.0],"3715":[46.2,12.5,17.6,5.3,0.0,0.0],"3716":[65.4,25.0,22.2,13.3,8.3,0.0],"3717":[55.6,0.0,22.2,14.3,0.0,0.0],"3718":[66.7,4.8,0.0,0.0,0.0,0.0],"3719":[53.6,28.6,0.0,12.0,5.3,0.0],"3721":[85.7,23.8,23.1,24.1,10.0,0.0],"3722":[20.0,5.6,4.8,0.0,0.0,0.0],"3726":[33.3,11.1,0.0,0.0,0.0,0.0],"3730":[33.3,3.8,13.0,11.1,4.0,0.0],"3731":[45.8,14.3,3.6,0.0,0.0,0.0],"3736":[41.7,0.0,8.3,23.1,0.0,0.0],"3737":[61.5,7.1,29.4,5.9,7.1,8.3],"3740":[54.5,25.0,13.3,9.1,42.1,15.4],"3741":[33.3,5.0,5.9,0.0,0.0,0.0],"3742":[8.3,0.0,12.5,0.0,0.0,0.0],"3743":[51.5,18.5,19.4,25.0,12.5,null],"3744":[70.0,38.1,27.8,31.2,9.5,0.0],"3745":[38.9,0.0,6.7,7.7,9.1,0.0],"3746":[57.1,15.0,0.0,10.0,8.0,0.0],"3747":[50.0,5.3,7.1,8.3,4.8,5.6],"3748":[15.0,4.5,0.0,10.5,0.0,0.0],"3752":[28.6,5.0,7.7,13.3,5.0,0.0],"3757":[53.8,8.7,0.0,8.7,0.0,0.0],"3761":[72.7,15.4,0.0,13.3,17.6,0.0],"3769":[31.8,0.0,5.0,14.3,0.0,0.0],"3771":[56.2,4.8,5.0,11.8,4.3,8.3],"3772":[50.0,12.5,5.3,6.2,5.3,0.0],"3773":[47.1,5.9,12.5,16.0,7.7,0.0],"3775":[16.7,8.7,12.0,0.0,0.0,0.0],"3776":[14.3,0.0,4.8,4.3,0.0,0.0],"3777":[63.6,22.2,25.0,0.0,0.0,0.0],"3778":[21.4,0.0,4.8,7.7,0.0,0.0],"3779":[73.5,21.1,33.3,25.0,28.6,0.0],"3783":[55.6,43.5,13.3,14.3,25.0,0.0],"3784":[31.2,11.1,15.4,6.7,10.5,12.5],"3787":[15.4,6.2,0.0,5.9,0.0,0.0],"3788":[75.0,29.4,5.9,22.2,10.0,0.0],"3790":[23.1,11.1,7.1,0.0,6.2,0.0],"3792":[45.5,11.8,17.6,21.4,0.0,7.1],"3793":[46.7,13.3,6.7,5.9,0.0,0.0],"3796":[26.7,21.1,4.2,4.3,5.9,0.0],"3797":[33.3,5.3,5.0,0.0,0.0,0.0],"3800":[50.0,6.7,0.0,11.1,0.0,7.1],"3801":[62.5,11.1,0.0,44.4,0.0,0.0],"3804":[16.7,21.1,5.6,7.7,5.3,0.0],"3805":[47.1,11.1,12.5,11.8,5.6,0.0],"3807":[28.6,4.5,10.5,6.2,0.0,0.0],"3808":[38.5,5.3,0.0,0.0,0.0,0.0],"3809":[23.1,5.6,9.5,0.0,6.7,null],"3811":[58.1,7.7,15.0,11.1,6.7,0.0],"3812":[21.1,0.0,0.0,4.2,6.2,6.2],"3813":[81.8,23.5,22.2,16.7,0.0,0.0],"3814":[31.6,8.7,0.0,12.5,0.0,0.0],"3820":[0.0,0.0,0.0,0.0,6.2,0.0],"3822":[70.0,15.4,23.8,23.8,10.3,33.3],"3825":[35.7,0.0,5.9,14.3,0.0,4.3],"3826":[52.2,11.8,11.8,6.7,4.5,0.0],"3827":[7.7,4.0,0.0,0.0,5.0,0.0],"3828":[52.4,11.8,10.5,0.0,0.0,0.0],"3831":[35.3,26.7,7.1,5.9,0.0,7.1],"3832":[23.5,5.0,6.7,5.9,6.7,0.0],"3833":[83.9,15.8,7.1,25.0,0.0,7.7],"3834":[35.7,11.8,7.1,0.0,0.0,0.0],"3837":[75.0,20.0,10.5,4.2,13.3,5.9],"3838":[52.6,10.5,0.0,0.0,5.3,0.0],"3839":[47.4,10.0,8.3,8.3,0.0,0.0],"3841":[57.1,16.7,30.4,12.5,4.5,0.0],"3842":[43.5,33.3,11.8,21.1,0.0,0.0],"3843":[42.1,5.0,20.0,4.2,5.3,0.0],"3845":[64.7,9.1,21.1,6.7,0.0,null],"3848":[50.0,0.0,25.0,10.0,22.2,3.6],"3849":[77.1,25.9,39.1,43.3,7.7,null],"3850":[33.3,0.0,12.0,0.0,3.4,0.0],"3851":[27.3,0.0,14.3,0.0,0.0,0.0],"3852":[57.1,0.0,9.5,4.2,4.8,4.0],"3853":[45.5,4.3,16.0,6.2,8.3,0.0],"3854":[65.6,18.8,10.5,17.4,5.3,10.0],"3857":[null,0.0,null,null,20.0,23.1],"3859":[23.1,25.0,0.0,0.0,7.1,0.0],"3860":[17.6,10.5,25.0,6.2,5.0,0.0],"3863":[28.6,7.1,0.0,7.7,0.0,0.0],"3866":[0.0,0.0,0.0,0.0,0.0,0.0],"3867":[53.3,8.7,5.3,10.0,4.5,0.0],"3868":[9.1,0.0,0.0,5.3,5.9,0.0],"3869":[33.3,9.5,0.0,0.0,4.2,0.0],"3870":[52.9,4.2,0.0,14.3,0.0,0.0],"3871":[44.4,7.7,13.3,0.0,0.0,0.0],"3872":[58.6,4.8,13.0,14.3,13.0,0.0],"3873":[61.5,9.1,11.5,18.8,9.1,0.0],"3874":[62.5,12.5,5.0,10.0,11.1,10.5],"3875":[63.6,17.6,5.0,4.8,0.0,0.0],"3876":[85.7,35.3,55.0,27.8,38.9,14.3],"3878":[36.4,6.2,5.3,13.3,0.0,0.0],"3880":[31.6,3.8,8.3,0.0,0.0,11.1],"3882":[35.0,15.8,8.0,7.1,0.0,0.0],"3885":[35.0,14.3,16.7,11.1,0.0,0.0],"3888":[52.4,13.0,10.0,10.7,0.0,5.3],"3889":[37.5,5.6,4.8,0.0,4.3,0.0],"3891":[20.0,12.5,0.0,0.0,0.0,0.0],"3892":[58.8,8.7,5.6,0.0,4.2,6.7],"3893":[25.0,0.0,23.5,0.0,0.0,0.0],"3895":[22.2,0.0,13.3,7.1,8.3,0.0],"3896":[53.8,0.0,0.0,5.9,0.0,0.0],"3897":[64.3,29.4,0.0,22.2,8.3,0.0],"3898":[68.0,8.7,29.2,21.1,12.5,0.0],"3900":[66.7,16.7,9.5,7.1,11.1,0.0],"3901":[27.3,21.4,10.0,7.7,7.7,0.0],"3902":[null,null,null,null,null,null],"3904":[27.3,22.2,0.0,22.2,null,0.0],"3905":[76.9,9.1,10.0,10.5,4.0,9.1],"3906":[35.7,4.5,5.3,7.1,10.5,6.2],"3907":[60.0,11.5,19.0,5.3,4.2,5.0],"3908":[76.5,8.3,18.2,4.3,22.2,8.3],"3909":[82.1,17.9,23.3,32.3,22.2,null],"3910":[46.7,8.7,9.1,6.2,7.1,0.0],"3911":[27.3,14.3,15.8,12.0,8.3,11.1],"3912":[64.0,36.8,4.5,14.3,0.0,4.3],"3915":[71.4,12.0,4.5,5.0,0.0,0.0],"3918":[42.9,23.8,16.0,23.5,17.6,4.2],"3920":[46.7,5.1,7.7,4.8,null,null],"3921":[30.8,6.7,13.3,6.7,0.0,0.0],"3922":[37.5,0.0,7.7,0.0,0.0,0.0],"3928":[14.3,0.0,15.8,0.0,0.0,0.0],"3929":[27.8,5.6,5.0,10.0,8.3,0.0],"3930":[50.0,25.0,13.6,23.5,0.0,0.0],"3931":[41.2,6.7,0.0,12.5,0.0,6.2],"3932":[16.7,22.2,14.3,0.0,0.0,0.0],"3933":[45.0,14.3,12.9,0.0,null,null],"3934":[12.5,15.4,9.5,10.0,5.0,0.0],"3935":[29.4,0.0,19.0,0.0,0.0,0.0],"3939":[66.7,14.3,0.0,20.0,12.5,0.0],"3940":[66.7,29.0,13.3,30.8,0.0,4.3],"3941":[88.9,17.4,10.5,29.2,9.1,0.0],"3942":[63.3,7.1,29.4,4.5,13.3,0.0],"3943":[null,null,null,null,null,null],"3944":[57.7,6.7,25.0,10.0,0.0,6.2],"3945":[11.1,0.0,0.0,11.1,0.0,0.0],"3946":[65.9,12.3,9.4,0.0,null,null],"3947":[45.5,14.3,5.0,5.0,0.0,11.1],"3948":[23.1,6.7,6.7,0.0,0.0,0.0],"3949":[9.1,10.0,0.0,0.0,0.0,0.0],"3950":[20.0,0.0,6.2,0.0,0.0,0.0],"3951":[46.2,23.8,17.4,13.6,6.2,0.0],"3952":[56.8,33.3,22.2,21.1,21.7,11.5],"3953":[30.0,0.0,0.0,6.7,6.7,0.0],"3955":[40.0,23.5,14.3,10.5,13.3,0.0],"3956":[71.4,16.0,22.7,17.6,10.0,0.0],"3957":[35.3,5.0,8.3,20.0,0.0,0.0],"3959":[80.8,20.0,15.8,25.0,25.0,0.0],"3960":[70.3,30.4,18.2,21.9,19.2,36.4],"3961":[66.7,0.0,16.7,6.2,18.2,5.9],"3963":[41.7,13.3,15.8,16.7,13.3,0.0],"3964":[33.3,10.5,0.0,0.0,5.0,0.0],"3965":[40.9,20.0,12.5,9.1,6.2,5.9],"3966":[61.3,20.8,23.1,25.9,13.6,8.7],"3967":[60.0,0.0,0.0,0.0,0.0,0.0],"3968":[50.0,5.0,25.0,10.5,4.8,7.7],"3973":[33.3,3.4,13.0,3.6,0.0,0.0],"3974":[30.0,8.3,10.0,5.3,0.0,0.0],"3975":[37.5,28.6,5.9,0.0,0.0,0.0],"3976":[29.4,6.2,15.0,0.0,0.0,0.0],"3977":[33.3,11.8,15.8,7.4,0.0,0.0],"3978":[81.5,22.7,20.8,13.0,7.4,0.0],"3981":[50.0,8.7,3.3,13.0,4.8,0.0],"3982":[46.2,25.0,4.8,17.6,5.0,0.0],"3983":[54.2,8.0,14.3,11.5,6.5,5.9],"3984":[65.4,5.9,30.0,6.7,5.6,5.6],"3986":[50.0,10.0,0.0,6.2,4.5,0.0],"3987":[33.3,0.0,16.7,8.3,0.0,0.0],"3988":[48.0,0.0,17.4,16.0,0.0,0.0],"3989":[16.7,0.0,0.0,0.0,0.0,0.0],"3990":[23.1,22.2,11.8,0.0,10.5,0.0],"3992":[38.9,5.6,6.2,5.0,9.1,0.0],"3993":[61.5,6.7,18.8,7.1,5.3,0.0],"3994":[20.0,25.0,0.0,6.7,0.0,0.0],"3995":[66.7,21.1,15.4,10.5,14.3,13.3],"3997":[68.8,36.0,26.3,4.0,14.3,0.0],"3998":[25.0,0.0,6.2,0.0,0.0,0.0],"3999":[56.7,16.7,25.0,13.0,0.0,0.0],"4000":[69.0,10.5,28.1,10.5,0.0,4.8],"4002":[63.0,23.8,11.8,8.7,19.0,0.0],"4003":[38.9,16.7,0.0,0.0,0.0,6.7],"4004":[33.3,0.0,5.9,13.3,0.0,0.0],"4006":[40.0,13.3,0.0,0.0,5.0,0.0],"4007":[57.1,12.5,23.8,5.0,8.3,0.0],"4009":[69.2,11.1,5.0,17.4,6.7,0.0],"4010":[9.1,5.6,6.2,0.0,5.0,0.0],"4011":[83.3,28.6,11.8,18.8,15.4,9.5],"4012":[44.4,24.0,28.0,16.7,8.7,0.0],"4013":[78.1,22.7,6.7,17.9,37.5,3.6],"4014":[50.0,17.6,12.5,0.0,0.0,0.0],"4015":[47.8,25.0,12.5,6.2,0.0,0.0],"4016":[6.7,5.9,0.0,0.0,16.7,0.0],"4017":[73.7,5.9,21.1,14.3,0.0,5.6],"4019":[70.8,36.8,25.0,5.6,21.1,0.0],"4020":[16.7,5.3,11.1,14.3,0.0,0.0],"4022":[50.0,11.1,21.1,0.0,0.0,0.0],"4023":[26.7,6.7,15.0,14.3,5.6,5.6],"4024":[70.0,8.0,25.0,14.3,21.4,0.0],"4025":[73.5,7.7,24.1,10.0,7.1,7.1],"4027":[53.6,20.0,12.0,4.3,4.3,0.0],"4028":[76.0,28.6,15.8,7.1,5.0,0.0],"4030":[41.2,15.0,20.0,10.5,4.2,7.7],"4031":[38.9,9.1,4.0,5.9,4.8,0.0],"4033":[76.7,41.4,15.4,14.3,4.5,6.2],"4034":[50.0,0.0,9.1,5.0,4.0,0.0],"4035":[28.6,10.5,6.7,0.0,9.1,7.1],"4036":[74.3,12.0,20.8,11.5,17.9,4.3],"4039":[47.4,13.0,23.5,12.5,12.0,0.0],"4040":[70.4,9.1,21.6,8.3,11.5,0.0],"4041":[42.9,0.0,9.1,28.6,0.0,0.0],"4042":[56.0,25.0,28.6,9.5,5.0,0.0],"4043":[66.7,3.8,28.0,18.2,12.9,0.0],"4044":[64.5,29.4,21.1,30.4,13.6,0.0],"4045":[44.4,13.0,20.8,17.6,5.3,0.0],"4046":[null,null,null,null,null,null],"4047":[71.4,0.0,0.0,4.5,0.0,0.0],"4049":[54.2,23.8,4.2,8.3,4.2,0.0],"4050":[87.9,52.9,35.3,33.3,6.2,12.5],"4051":[67.6,22.2,26.3,16.0,4.5,15.4],"4052":[79.2,19.0,33.3,0.0,0.0,5.6],"4053":[60.9,26.3,18.2,17.6,4.8,0.0],"4054":[46.2,0.0,6.2,0.0,17.6,11.1],"4055":[64.5,20.0,26.1,15.4,9.1,6.2],"4056":[53.3,8.7,5.0,0.0,5.6,0.0],"4057":[57.1,22.7,8.0,8.7,0.0,0.0],"4058":[36.0,8.7,16.7,0.0,4.8,0.0],"4059":[81.2,5.6,18.8,31.8,5.0,0.0],"4060":[39.1,11.1,13.0,27.3,4.5,10.5],"4061":[80.6,10.5,22.7,23.5,15.0,12.0],"4062":[50.0,0.0,6.2,8.7,4.5,0.0],"4063":[69.2,7.1,20.0,13.0,9.1,0.0],"4064":[78.4,23.8,21.4,36.8,5.3,0.0],"4065":[66.7,21.4,0.0,25.0,6.7,0.0],"4066":[69.2,11.1,15.4,19.0,4.5,4.5],"4067":[61.1,39.1,9.1,16.1,11.5,5.0],"4068":[50.0,9.1,5.0,5.0,5.0,5.6],"4069":[50.0,25.0,15.0,5.0,0.0,0.0],"4071":[45.5,7.7,0.0,9.1,6.2,0.0],"4072":[66.7,36.8,23.8,21.7,0.0,0.0],"4073":[47.6,21.1,26.3,15.8,5.3,0.0],"4074":[72.7,24.0,14.8,30.4,18.5,0.0],"4075":[63.3,35.0,19.0,12.5,16.7,5.3],"4076":[66.7,9.5,4.8,23.5,12.5,0.0],"4077":[15.8,10.5,7.7,11.1,0.0,0.0],"4079":[63.2,25.0,24.0,16.7,4.5,0.0],"4080":[81.2,17.6,37.5,25.0,18.8,7.1],"4081":[35.3,6.2,7.1,0.0,0.0,0.0],"4082":[57.1,25.0,9.5,11.5,9.5,7.1],"4083":[57.9,31.6,58.3,5.3,5.0,14.3],"4084":[81.2,16.7,21.1,22.7,16.0,0.0],"4085":[33.3,15.4,6.7,11.1,7.7,12.5],"4086":[43.5,18.8,12.5,17.6,0.0,7.7],"4089":[66.7,12.5,12.5,9.1,9.5,0.0],"4090":[78.9,22.2,33.3,16.7,19.0,5.0],"4092":[53.3,20.0,16.7,11.8,10.0,0.0],"4093":[23.5,5.6,13.3,0.0,5.0,0.0],"4094":[40.0,15.0,10.0,12.5,0.0,0.0],"4095":[61.5,11.8,13.3,15.4,22.2,0.0],"4096":[70.8,22.2,14.3,20.8,12.5,0.0],"4097":[0.0,0.0,5.3,0.0,4.5,0.0],"4098":[37.5,0.0,13.3,0.0,0.0,0.0],"4099":[76.9,15.8,8.7,5.0,0.0,0.0],"4100":[61.1,17.6,5.9,11.1,0.0,0.0],"4102":[79.2,17.6,37.5,40.0,26.1,4.5],"4103":[11.8,0.0,0.0,0.0,0.0,0.0],"4104":[46.2,5.6,5.9,16.7,9.5,0.0],"4105":[37.9,8.3,12.5,5.3,14.3,0.0],"4106":[25.0,10.5,0.0,8.0,7.1,0.0],"4108":[66.7,21.1,11.8,10.0,0.0,0.0],"4109":[77.4,25.0,13.6,16.7,13.0,14.3],"4110":[35.7,13.3,11.1,5.9,0.0,0.0],"4111":[50.0,18.2,16.0,6.2,0.0,0.0],"4112":[37.5,7.1,5.6,6.7,0.0,0.0],"4113":[52.6,6.7,11.1,18.2,0.0,6.7],"4114":[40.9,5.6,6.7,0.0,0.0,5.9],"4116":[18.2,19.0,17.4,9.7,5.0,0.0],"4117":[50.0,23.5,29.4,7.1,13.3,6.2],"4118":[71.0,36.4,10.3,20.8,0.0,4.0],"4119":[65.0,14.3,19.2,0.0,10.0,7.7],"4120":[55.2,4.5,10.0,8.7,0.0,0.0],"4121":[68.2,32.0,5.9,0.0,4.3,5.0],"4122":[51.9,14.3,17.4,19.2,5.3,0.0],"4123":[58.6,16.7,10.5,15.8,11.1,6.2],"4124":[64.3,23.5,33.3,9.5,13.6,7.1],"4128":[18.2,7.7,0.0,0.0,15.4,0.0],"4129":[11.1,25.0,0.0,0.0,6.2,0.0],"4131":[59.1,8.7,16.7,14.3,9.5,0.0],"4133":[53.6,13.8,28.0,5.3,15.4,12.5],"4134":[63.3,4.5,16.0,10.0,4.3,4.5],"4136":[61.3,26.1,29.2,4.8,15.0,0.0],"4137":[71.9,20.0,18.2,31.8,7.4,5.6],"4138":[38.5,0.0,0.0,13.3,15.4,0.0],"4139":[18.8,16.7,8.7,15.4,0.0,0.0],"4140":[72.7,11.8,20.0,10.5,8.3,0.0],"4142":[64.7,20.0,9.1,5.0,0.0,0.0],"4143":[40.0,0.0,0.0,5.9,0.0,0.0],"4144":[60.0,12.5,6.2,23.1,5.9,0.0],"4145":[25.0,10.0,0.0,5.3,0.0,0.0],"4146":[25.0,8.3,0.0,0.0,0.0,6.7],"4148":[59.1,5.6,16.7,4.8,6.7,0.0],"4150":[56.2,16.7,10.5,0.0,20.0,0.0],"4151":[50.0,12.5,7.4,3.3,0.0,0.0],"4152":[42.1,11.8,23.8,0.0,9.5,7.1],"4154":[52.2,20.8,17.9,11.1,9.1,0.0],"4155":[50.0,25.0,31.8,5.9,20.0,6.7],"4156":[50.0,10.0,17.4,11.1,5.6,0.0],"4158":[60.0,0.0,0.0,20.0,0.0,5.0],"4159":[57.7,22.2,16.0,9.1,8.0,0.0],"4161":[52.2,16.7,27.8,15.4,0.0,7.1],"4162":[40.0,0.0,0.0,0.0,0.0,0.0],"4163":[64.3,13.0,13.3,14.7,0.0,0.0],"4164":[9.1,0.0,5.3,0.0,0.0,0.0],"4166":[78.4,33.3,9.5,10.0,21.7,4.5],"4167":[21.4,11.1,5.9,0.0,0.0,0.0],"4168":[74.1,20.0,21.1,11.1,7.1,0.0],"4169":[45.5,7.7,11.8,0.0,6.2,0.0],"4171":[63.0,14.3,17.2,13.0,10.5,0.0],"4172":[64.5,9.1,14.3,5.0,0.0,0.0],"4173":[56.2,8.3,9.5,5.0,4.2,0.0],"4174":[75.0,16.7,25.0,8.3,0.0,null],"4175":[56.2,0.0,6.7,14.3,0.0,7.7],"4176":[25.0,16.7,5.0,0.0,4.3,9.1],"4177":[36.4,0.0,18.2,5.9,0.0,0.0],"4179":[57.9,21.1,9.5,5.9,0.0,0.0],"4180":[37.5,15.0,7.7,5.9,4.8,0.0],"4181":[33.3,5.3,4.5,5.0,0.0,0.0],"4182":[18.8,5.9,7.1,6.2,0.0,0.0],"4183":[63.3,31.8,18.2,27.8,6.7,4.2],"4184":[58.8,23.5,35.7,11.1,30.0,5.9],"4186":[0.0,11.1,6.7,0.0,0.0,0.0],"4188":[85.3,13.6,34.8,26.3,27.3,25.0],"4189":[68.0,11.1,13.8,8.1,0.0,0.0],"4190":[58.3,21.7,15.0,26.7,16.0,0.0],"4191":[70.0,12.0,12.5,4.5,4.5,0.0],"4193":[71.4,25.0,17.4,26.3,17.6,0.0],"4195":[25.0,6.2,7.1,5.3,6.2,0.0],"4196":[43.8,12.0,5.3,23.5,5.0,5.3],"4197":[18.8,0.0,0.0,0.0,0.0,0.0],"4199":[60.0,7.0,7.1,12.9,20.0,null],"4200":[27.8,5.0,4.8,0.0,4.3,0.0],"4201":[21.4,17.6,7.1,17.6,14.3,0.0],"4202":[31.6,15.8,3.8,0.0,0.0,0.0],"4203":[50.0,0.0,8.3,8.3,11.1,0.0],"4204":[41.2,19.0,9.5,0.0,5.0,0.0],"4205":[88.0,26.1,19.0,9.5,5.0,7.1],"4207":[73.3,4.2,25.0,29.4,13.0,0.0],"4208":[64.0,10.5,20.0,15.0,17.6,0.0],"4209":[27.3,15.8,16.7,5.6,5.0,0.0],"4210":[34.6,13.6,9.5,3.6,5.9,0.0],"4211":[15.4,0.0,11.1,0.0,0.0,0.0],"4213":[40.0,16.7,7.7,21.4,19.2,6.7],"4214":[47.6,10.0,0.0,7.7,6.2,0.0],"4215":[69.0,4.5,9.1,14.3,15.4,0.0],"4216":[65.5,12.0,9.5,16.1,0.0,4.5],"4218":[77.8,9.1,25.8,7.7,8.6,null],"4219":[21.4,0.0,0.0,0.0,11.5,0.0],"4220":[72.7,10.0,17.6,0.0,0.0,0.0],"4224":[66.7,20.8,9.5,20.0,9.1,0.0],"4225":[45.8,25.0,7.1,6.2,0.0,5.6],"4226":[27.8,11.1,13.6,10.5,0.0,0.0],"4227":[87.0,15.8,4.8,4.2,11.1,0.0],"4228":[57.1,15.8,21.7,4.5,0.0,5.9],"4229":[63.6,7.7,0.0,0.0,0.0,0.0],"4230":[81.8,9.5,21.4,27.8,18.5,9.5],"4231":[56.2,19.0,13.6,21.7,18.2,0.0],"4232":[10.0,5.6,5.9,8.3,0.0,0.0],"4233":[33.3,5.6,17.4,22.2,8.7,0.0],"4234":[40.0,6.2,9.1,0.0,0.0,0.0],"4236":[86.5,21.7,22.2,37.9,23.1,9.1],"4237":[63.3,21.7,13.6,29.6,4.5,0.0],"4238":[66.7,18.2,16.7,20.0,0.0,0.0],"4239":[60.0,32.0,44.4,15.4,8.3,6.7],"4240":[62.1,26.3,12.5,7.1,0.0,0.0],"4241":[66.7,0.0,13.0,0.0,0.0,0.0],"4243":[44.4,26.1,12.0,13.3,15.0,0.0],"4244":[46.7,15.0,5.9,11.8,0.0,0.0],"4245":[40.0,14.8,9.5,10.0,0.0,0.0],"4246":[35.7,11.1,0.0,5.9,0.0,0.0],"4247":[34.8,9.1,20.8,9.1,0.0,0.0],"4248":[54.5,0.0,8.3,5.6,0.0,0.0],"4251":[30.0,9.1,20.8,7.7,0.0,0.0],"4252":[21.4,10.0,0.0,12.5,4.8,0.0],"4253":[41.2,4.3,0.0,8.3,0.0,0.0],"4254":[73.1,35.0,3.6,8.3,5.6,0.0],"4256":[82.1,23.1,20.0,11.8,14.3,15.8],"4257":[42.9,7.1,7.7,29.4,5.6,0.0],"4258":[57.9,4.3,5.6,8.3,13.3,0.0],"4259":[75.0,8.3,5.9,6.7,8.3,5.9],"4260":[69.6,0.0,19.0,20.0,10.0,0.0],"4261":[75.0,17.4,20.0,14.3,0.0,4.3],"4262":[82.8,22.7,17.4,11.8,23.8,7.1],"4263":[68.8,33.3,18.2,9.1,0.0,0.0],"4264":[76.3,9.1,20.8,14.3,10.0,5.6],"4266":[67.7,31.6,28.0,5.9,15.8,0.0],"4268":[10.0,0.0,0.0,6.2,4.8,0.0],"4269":[76.9,4.8,8.0,37.5,15.8,0.0],"4270":[33.3,4.3,6.2,10.0,0.0,0.0],"4271":[35.7,6.7,6.2,5.9,0.0,0.0],"4272":[40.0,17.6,15.8,0.0,0.0,0.0],"4273":[18.2,13.3,15.4,0.0,0.0,0.0],"4274":[64.7,0.0,0.0,0.0,0.0,0.0],"4275":[28.6,0.0,0.0,0.0,0.0,0.0],"4276":[69.0,33.3,28.6,25.0,22.2,0.0],"4277":[53.3,17.4,17.4,13.6,11.5,7.7],"4278":[71.4,16.7,39.1,18.2,8.0,6.2],"4281":[66.7,5.9,11.8,15.0,5.0,0.0],"4283":[20.0,11.8,25.0,12.5,0.0,0.0],"4286":[55.2,11.5,8.7,20.0,0.0,0.0],"4287":[83.3,0.0,25.0,23.8,6.2,0.0],"4288":[74.3,24.1,14.3,9.5,12.5,0.0],"4289":[82.6,16.7,18.2,20.0,0.0,7.1],"4290":[75.0,25.0,6.7,6.7,13.0,0.0],"4292":[70.0,18.2,25.0,0.0,10.5,0.0],"4293":[66.7,8.7,4.8,5.3,12.0,15.4],"4294":[65.2,9.1,17.6,31.6,13.6,12.5],"4295":[57.1,23.5,20.0,16.7,3.1,0.0],"4296":[70.4,20.0,42.9,0.0,17.4,0.0],"4297":[80.0,11.1,20.8,22.2,17.4,7.1],"4298":[56.5,0.0,23.5,19.0,10.0,0.0],"4299":[50.0,20.0,0.0,0.0,0.0,0.0],"4300":[46.2,0.0,0.0,7.1,0.0,0.0],"4301":[33.3,5.9,7.7,11.1,5.6,null],"4302":[56.7,10.3,3.3,11.8,4.5,null],"4303":[60.9,15.8,8.7,10.0,4.3,0.0],"4304":[null,null,null,null,null,null],"4305":[93.1,38.5,30.0,18.8,27.8,10.5],"4306":[50.0,22.2,6.2,9.1,0.0,0.0],"4308":[64.3,5.0,30.4,10.0,11.1,5.3],"4311":[64.0,23.8,24.0,20.0,12.5,8.3],"4313":[null,null,null,null,null,null],"4314":[81.8,25.0,25.9,14.3,0.0,0.0],"4315":[50.0,6.2,7.7,10.0,18.8,0.0],"4317":[50.0,10.0,5.6,11.1,0.0,0.0],"4318":[29.2,33.3,33.3,0.0,0.0,4.8],"4319":[60.0,13.3,4.3,25.0,3.6,0.0],"4320":[71.4,29.4,22.2,23.1,13.6,0.0],"4323":[20.0,11.8,0.0,16.7,0.0,5.0],"4324":[71.1,26.5,28.1,14.8,14.8,0.0],"4325":[27.3,17.6,4.5,6.2,0.0,0.0],"4327":[33.3,5.0,7.7,15.0,4.8,0.0],"4329":[27.8,10.0,0.0,0.0,0.0,0.0],"4330":[65.0,31.2,22.2,20.0,0.0,0.0],"4331":[81.2,28.6,9.1,16.7,11.1,10.0],"4332":[25.0,6.7,0.0,0.0,0.0,0.0],"4335":[71.4,42.1,20.0,11.1,11.1,5.0],"4336":[63.0,9.1,3.8,4.3,3.2,0.0],"4337":[75.0,4.5,8.7,13.0,16.1,5.6],"4339":[31.2,9.5,5.9,0.0,5.0,0.0],"4340":[null,null,null,null,null,null],"4342":[85.7,31.8,37.5,20.0,4.8,0.0],"4343":[0.0,0.0,5.0,0.0,0.0,0.0],"4344":[79.3,35.0,20.0,33.3,15.0,16.7],"4345":[57.1,6.2,23.5,11.8,0.0,6.7],"4346":[36.4,9.1,11.8,6.2,9.1,0.0],"4347":[47.6,0.0,16.7,5.3,0.0,0.0],"4348":[55.6,17.4,11.8,3.8,0.0,0.0],"4349":[40.0,17.6,6.7,21.1,0.0,0.0],"4350":[74.1,18.8,21.4,10.7,5.3,6.2],"4351":[66.7,40.0,38.1,15.0,0.0,0.0],"4352":[74.1,37.5,0.0,17.6,12.5,11.1],"4355":[50.0,0.0,0.0,0.0,0.0,0.0],"4356":[65.2,13.0,16.0,16.0,8.3,12.5],"4357":[55.9,27.8,32.1,22.2,7.1,0.0],"4358":[37.5,12.5,15.0,0.0,0.0,0.0],"4359":[46.7,5.6,30.8,21.4,5.6,5.3],"4360":[50.0,12.5,23.1,3.7,0.0,0.0],"4361":[93.3,27.3,18.2,30.4,18.8,0.0],"4362":[62.1,23.1,5.0,10.5,9.1,0.0],"4363":[55.2,13.6,4.2,20.8,8.0,5.0],"4364":[73.0,23.8,34.8,36.8,7.7,7.1],"4365":[47.8,12.5,10.5,14.3,0.0,0.0],"4366":[55.2,9.5,26.1,34.6,0.0,0.0],"4367":[38.5,11.1,4.3,4.0,7.1,0.0],"4368":[46.2,5.0,4.5,0.0,0.0,0.0],"4369":[66.7,9.5,21.7,33.3,14.3,0.0],"4370":[70.0,37.5,20.0,28.6,25.0,14.3],"4371":[73.1,6.7,0.0,10.5,11.1,0.0],"4372":[66.7,25.0,15.4,6.7,9.1,0.0],"4373":[48.0,25.0,5.3,13.6,0.0,0.0],"4374":[52.9,22.7,4.3,4.8,0.0,0.0],"4375":[62.5,15.0,20.0,22.7,9.5,5.3],"4376":[65.2,12.5,8.7,12.0,5.0,0.0],"4377":[65.6,26.9,14.3,38.9,11.5,9.5],"4379":[76.9,24.0,21.1,14.3,8.0,0.0],"4380":[62.5,0.0,15.4,11.1,4.8,0.0],"4381":[48.1,23.8,41.2,15.8,0.0,0.0],"4382":[15.8,0.0,4.3,8.0,4.5,0.0],"4383":[50.0,9.1,15.8,0.0,0.0,8.3],"4384":[64.5,22.7,27.3,22.7,0.0,5.0],"4385":[30.0,7.7,0.0,0.0,0.0,8.3],"4387":[71.0,23.5,27.8,12.5,14.3,5.9],"4388":[61.9,13.0,15.0,0.0,10.5,5.6],"4389":[18.8,18.8,0.0,5.3,8.3,0.0],"4390":[7.1,8.3,5.9,0.0,11.1,7.1],"4391":[61.8,37.5,34.8,17.4,4.3,4.8],"4393":[50.0,8.7,4.8,4.8,5.3,0.0],"4394":[64.3,11.8,23.1,22.2,0.0,0.0],"4395":[40.0,0.0,11.1,10.0,6.7,0.0],"4396":[41.2,18.8,4.5,4.5,0.0,0.0],"4397":[74.3,19.2,14.8,14.3,13.0,11.8],"4398":[61.3,41.7,31.2,17.4,12.0,0.0],"4399":[null,null,null,null,null,null],"4400":[9.1,0.0,5.6,0.0,0.0,0.0],"4401":[58.3,6.2,5.3,10.0,10.5,0.0],"4402":[66.7,5.6,25.0,25.0,0.0,0.0],"4403":[52.9,11.1,13.6,14.3,0.0,0.0],"4404":[28.6,4.8,5.3,12.0,5.6,0.0],"4405":[21.4,9.5,8.7,0.0,4.3,0.0],"4406":[38.5,5.3,10.5,6.2,3.8,0.0],"4407":[54.5,3.8,7.4,7.7,0.0,0.0],"4408":[27.3,0.0,13.3,7.7,0.0,0.0],"4409":[77.8,28.6,8.0,13.0,13.6,9.5],"4410":[56.2,18.2,13.6,11.5,10.5,0.0],"4411":[53.8,15.0,27.8,0.0,4.2,4.2],"4413":[66.7,10.5,5.0,5.9,21.7,0.0],"4414":[42.9,18.8,0.0,8.3,15.4,0.0],"4415":[68.8,14.8,14.3,29.6,18.2,3.0],"4416":[22.2,4.8,11.1,18.2,10.5,0.0],"4417":[33.3,0.0,5.0,0.0,0.0,7.7],"4418":[77.1,31.6,36.4,21.1,15.0,8.7],"4419":[30.8,18.8,7.1,13.3,0.0,0.0],"4420":[59.3,12.5,19.0,11.1,16.7,0.0],"4421":[9.1,0.0,6.2,0.0,4.8,0.0],"4422":[50.0,11.1,15.8,4.5,0.0,0.0],"4423":[62.5,13.0,4.0,26.1,0.0,5.3],"4424":[71.0,0.0,4.0,8.0,11.1,3.4],"4425":[61.5,10.0,0.0,0.0,5.0,0.0],"4427":[88.0,16.7,44.4,27.3,11.8,5.9],"4428":[66.7,21.7,23.8,17.6,8.7,5.0],"4429":[41.2,8.7,4.0,4.5,4.8,0.0],"4430":[53.8,9.1,16.7,20.8,16.7,0.0],"4431":[50.0,20.0,6.2,5.3,6.7,7.1],"4432":[57.1,5.6,12.0,0.0,0.0,0.0],"4433":[84.2,37.5,22.7,26.1,6.2,4.8],"4434":[63.0,33.3,23.8,11.5,4.2,0.0],"4435":[37.5,15.4,11.1,15.8,5.9,0.0],"4436":[60.7,28.6,16.7,14.3,0.0,0.0],"4437":[87.5,16.7,27.8,10.0,0.0,0.0],"4438":[50.0,11.1,11.8,33.3,11.1,8.3],"4439":[10.0,0.0,0.0,6.7,0.0,0.0],"4440":[43.8,0.0,0.0,4.3,5.3,0.0],"4441":[73.1,16.7,18.8,9.5,10.0,0.0],"4442":[52.6,0.0,20.0,17.4,0.0,4.8],"4443":[55.0,22.2,11.1,5.3,11.1,0.0],"4444":[73.9,5.0,9.5,22.2,21.7,7.7],"4445":[82.6,0.0,29.4,5.0,5.6,0.0],"4446":[75.0,20.0,14.3,13.0,4.5,0.0],"4447":[60.7,23.8,14.3,27.3,4.8,0.0],"4448":[62.5,26.3,40.0,35.7,12.5,0.0],"4449":[26.7,0.0,13.0,4.2,0.0,6.2],"4450":[47.4,6.2,23.5,7.1,17.6,0.0],"4451":[65.7,15.0,19.0,19.0,5.0,0.0],"4452":[52.0,18.2,8.0,4.5,5.0,0.0],"4456":[75.0,31.2,30.8,0.0,11.8,0.0],"4457":[43.8,0.0,29.4,0.0,5.3,0.0],"4458":[50.0,8.0,9.1,9.5,9.1,0.0],"4459":[69.2,8.3,9.5,12.0,0.0,0.0],"4460":[63.6,13.3,7.7,16.7,7.1,11.1],"4461":[23.1,9.1,9.1,0.0,0.0,0.0],"4462":[50.0,6.7,13.3,11.1,15.0,0.0],"4463":[42.3,9.5,38.5,5.9,6.2,5.9],"4464":[53.8,11.1,0.0,5.3,6.7,0.0],"4465":[28.6,0.0,0.0,0.0,0.0,0.0],"4466":[66.7,4.0,27.3,6.2,0.0,0.0],"4467":[36.8,16.0,16.7,29.2,11.1,0.0],"4468":[82.8,38.1,19.0,29.4,23.5,0.0],"4469":[60.0,17.6,10.5,8.3,16.7,5.9],"4470":[80.0,18.2,18.8,12.5,4.2,0.0],"4471":[76.5,33.3,18.2,15.0,4.3,16.7],"4472":[73.3,14.3,8.7,9.5,7.1,0.0],"4473":[62.5,22.2,12.5,23.1,7.7,0.0],"4474":[50.0,7.7,17.6,12.5,0.0,0.0],"4475":[55.6,11.1,21.1,9.1,10.5,0.0],"4477":[67.9,15.8,15.8,20.0,11.1,0.0],"4478":[46.2,13.0,15.0,17.6,15.4,0.0],"4479":[11.1,0.0,12.5,6.2,0.0,0.0],"4482":[74.3,28.6,21.1,11.1,20.0,11.8],"4483":[75.8,26.1,42.9,40.0,3.7,8.7],"4484":[23.1,15.0,13.0,0.0,5.0,0.0],"4485":[42.1,25.0,10.0,21.1,3.8,0.0],"4486":[55.0,15.0,23.5,14.3,5.0,0.0],"4487":[29.4,17.4,8.0,4.5,0.0,0.0],"4488":[68.4,29.4,33.3,7.1,15.4,0.0],"4489":[38.5,22.2,18.8,22.2,16.7,0.0],"4491":[50.0,6.7,5.3,0.0,12.5,0.0],"4492":[53.3,28.6,20.0,10.0,30.0,0.0],"4494":[65.0,13.0,16.7,9.5,20.8,5.0],"4495":[58.8,22.2,5.6,33.3,18.2,18.8],"4496":[52.6,0.0,0.0,11.1,0.0,6.7],"4497":[52.4,17.6,28.6,11.1,20.0,0.0],"4498":[45.5,0.0,50.0,6.7,6.7,0.0],"4499":[75.0,0.0,45.5,33.3,0.0,0.0],"4500":[75.0,21.7,46.4,29.4,26.1,0.0],"4501":[58.3,20.8,10.0,11.5,12.5,5.6],"4502":[78.1,22.2,22.2,10.5,11.1,11.1],"4503":[83.8,18.2,34.8,16.0,10.0,9.5],"4504":[73.3,10.7,10.3,10.7,5.0,5.3],"4505":[62.5,21.1,16.0,13.8,3.6,0.0],"4506":[56.0,18.2,19.2,13.0,4.3,0.0],"4508":[45.5,6.2,0.0,12.5,18.8,0.0],"4509":[45.8,13.0,5.0,11.1,0.0,0.0],"4510":[0.0,0.0,0.0,0.0,0.0,0.0],"4511":[40.0,0.0,8.7,0.0,0.0,0.0],"4512":[82.4,20.0,39.1,11.5,0.0,4.2],"4513":[30.0,0.0,22.7,10.0,0.0,0.0],"4514":[65.7,34.6,33.3,3.8,4.5,11.1],"4515":[65.4,18.2,23.3,0.0,5.6,0.0],"4516":[59.4,8.0,13.0,10.3,4.8,6.2],"4518":[70.8,26.3,15.8,33.3,8.7,0.0],"4519":[50.0,11.1,9.1,27.8,26.3,0.0],"4520":[38.5,18.8,6.7,5.0,6.7,0.0],"4521":[56.2,26.3,31.2,14.3,9.5,5.6],"4522":[76.9,29.4,12.5,0.0,12.5,0.0],"4523":[62.5,18.2,21.4,5.0,5.9,0.0],"4524":[83.9,21.7,4.0,20.0,0.0,0.0],"4525":[45.5,5.9,0.0,0.0,7.1,0.0],"4526":[63.6,5.6,15.8,10.5,4.5,0.0],"4527":[33.3,7.7,5.9,5.6,0.0,0.0],"4528":[84.4,31.8,40.0,20.0,8.7,10.0],"4529":[56.0,5.6,11.1,6.7,0.0,0.0],"4530":[85.3,36.4,15.8,31.6,27.8,11.8],"4531":[65.4,18.2,14.3,11.1,12.5,10.5],"4532":[68.0,10.5,40.0,25.0,17.6,7.7],"4533":[66.7,11.1,0.0,25.0,22.2,0.0],"4534":[0.0,9.1,0.0,0.0,0.0,0.0],"4535":[71.4,6.2,20.0,16.7,23.5,9.1],"4536":[45.0,12.5,16.7,12.5,0.0,7.1],"4537":[76.2,29.2,15.8,10.0,5.6,10.0],"4538":[55.0,20.0,31.2,30.4,18.2,18.5],"4539":[52.0,33.3,22.7,23.8,0.0,10.5],"4540":[55.0,11.1,13.0,29.4,4.8,0.0],"4543":[64.9,29.2,16.7,6.9,19.0,0.0],"4544":[80.0,36.4,31.8,39.1,40.0,5.9],"4545":[82.6,6.2,35.7,14.3,18.2,8.0],"4546":[63.2,18.8,25.0,11.1,0.0,20.0],"4547":[62.1,18.2,25.0,22.7,9.1,0.0],"4548":[16.7,0.0,0.0,0.0,0.0,0.0],"4549":[54.5,23.1,15.8,0.0,5.3,0.0],"4550":[57.9,16.7,4.5,13.3,0.0,0.0],"4551":[34.6,16.0,23.8,12.5,5.6,5.0],"4552":[50.0,5.6,8.7,11.5,18.8,9.1],"4553":[80.0,33.3,0.0,5.3,0.0,8.3],"4555":[47.1,15.0,0.0,17.6,0.0,0.0],"4556":[66.7,52.9,25.0,18.2,18.2,0.0],"4557":[46.2,11.8,0.0,5.9,6.7,0.0],"4558":[40.0,8.3,5.3,0.0,0.0,0.0],"4560":[58.8,23.5,23.1,18.2,0.0,0.0],"4561":[39.1,20.0,42.1,35.7,11.8,15.4],"4562":[29.4,4.5,0.0,5.6,0.0,0.0],"4563":[45.5,4.5,13.0,4.5,0.0,0.0],"4564":[21.4,13.3,0.0,0.0,0.0,0.0],"4565":[36.4,4.8,10.5,0.0,0.0,0.0],"4566":[80.0,5.9,23.1,12.0,4.8,9.1],"4567":[22.2,0.0,0.0,0.0,0.0,0.0],"4568":[78.3,0.0,5.3,12.5,0.0,5.3],"4569":[null,null,null,null,null,null],"4570":[52.8,21.7,26.1,17.9,20.0,0.0],"4571":[53.3,12.5,38.1,60.0,40.0,30.6],"4572":[47.1,15.4,33.3,7.1,0.0,0.0],"4573":[83.3,10.0,22.2,13.0,5.3,0.0],"4574":[37.5,9.5,11.1,9.5,0.0,0.0],"4575":[70.0,10.5,23.5,16.7,5.9,6.2],"4578":[73.7,26.1,26.3,15.4,26.3,0.0],"4579":[67.7,5.9,28.0,15.0,9.1,5.9],"4580":[81.0,6.7,0.0,20.0,20.0,0.0],"4581":[66.7,23.8,20.0,3.8,11.1,0.0],"4583":[56.0,17.4,10.3,4.0,5.3,0.0],"4584":[67.9,30.4,16.7,19.0,21.1,12.5],"4586":[82.6,11.1,17.4,5.3,22.2,11.1],"4587":[40.9,12.5,14.3,22.7,6.2,0.0],"4588":[72.4,9.5,17.2,22.2,29.4,0.0],"4589":[53.3,0.0,20.0,29.4,8.3,0.0],"4590":[73.5,22.7,31.2,9.1,27.8,6.7],"4592":[30.8,14.3,9.5,0.0,0.0,0.0],"4593":[69.6,5.6,17.6,8.3,4.5,0.0],"4594":[56.5,31.8,5.9,25.9,4.8,0.0],"4596":[48.4,31.8,14.3,5.0,4.3,0.0],"4598":[75.0,25.0,27.8,13.3,13.6,7.1],"4600":[80.0,23.8,10.5,20.0,0.0,0.0],"4601":[62.5,18.8,16.7,4.5,23.5,0.0],"4603":[68.4,13.3,5.0,0.0,0.0,0.0],"4604":[83.9,13.8,4.0,11.1,21.1,8.7],"4607":[55.0,10.0,4.8,5.6,10.0,5.9],"4608":[45.8,10.0,18.5,11.5,0.0,0.0],"4610":[47.4,8.7,31.6,36.8,14.3,10.3],"4611":[66.7,47.4,9.1,0.0,0.0,13.3],"4614":[79.3,36.8,18.8,19.0,11.8,0.0],"4615":[27.3,4.8,13.3,5.9,4.3,0.0],"4618":[33.3,17.6,0.0,4.3,8.3,0.0],"4619":[41.7,9.1,17.6,10.5,16.7,15.0],"4623":[50.0,8.7,14.3,6.7,4.5,0.0],"4624":[61.5,25.0,23.1,36.4,14.3,5.6],"4625":[53.8,6.2,10.0,11.8,4.3,10.5],"4626":[42.9,11.8,18.8,7.1,0.0,0.0],"4627":[45.0,20.0,26.7,15.8,6.2,5.6],"4630":[51.9,5.9,28.0,24.0,23.5,4.0],"4631":[62.5,6.2,7.1,0.0,15.8,0.0],"4632":[58.3,7.7,5.6,6.2,0.0,0.0],"4633":[53.8,11.8,18.2,5.9,5.9,0.0],"4635":[9.1,14.3,15.4,0.0,0.0,0.0],"4636":[33.3,0.0,5.3,20.0,0.0,0.0],"4637":[37.5,0.0,18.2,13.6,5.3,0.0],"4638":[25.0,4.8,12.5,15.4,11.1,7.1],"4639":[33.3,0.0,9.5,0.0,0.0,0.0],"4640":[55.6,16.0,16.7,17.4,10.7,0.0],"4641":[33.3,5.0,17.6,15.8,4.3,0.0],"4642":[88.5,30.0,26.1,11.1,0.0,6.2],"4643":[78.1,33.3,12.5,28.6,18.2,0.0],"4644":[61.9,21.4,29.4,8.7,6.7,0.0],"4645":[73.3,21.1,16.7,9.1,17.4,9.5],"4648":[42.9,4.0,10.5,7.7,0.0,0.0],"4649":[53.8,31.8,13.6,11.5,0.0,0.0],"4650":[79.2,20.8,21.7,12.0,0.0,0.0],"4651":[50.0,11.8,10.5,6.2,0.0,0.0],"4652":[38.9,23.5,4.2,5.3,15.8,0.0],"4653":[83.3,30.4,17.4,13.6,10.5,0.0],"4654":[69.6,23.5,12.5,9.1,10.5,0.0],"4656":[23.1,4.8,5.6,21.1,0.0,0.0],"4659":[85.2,25.0,15.8,9.5,15.0,5.9],"4660":[null,null,null,0.0,null,null],"4661":[36.4,0.0,0.0,0.0,0.0,0.0],"4663":[null,null,null,null,null,null],"4664":[10.0,7.1,5.9,6.7,8.3,0.0],"4665":[16.7,5.6,0.0,0.0,0.0,0.0],"4666":[16.7,0.0,0.0,0.0,0.0,0.0],"4669":[46.2,0.0,0.0,10.0,0.0,0.0],"4672":[21.4,0.0,0.0,5.0,10.0,5.6],"4674":[34.8,18.8,17.4,19.0,0.0,0.0],"4675":[53.8,14.3,16.7,20.0,0.0,0.0],"4676":[28.6,13.6,4.8,0.0,0.0,0.0],"4677":[57.1,27.3,42.9,18.2,9.1,0.0],"4678":[73.3,6.7,21.4,0.0,0.0,0.0],"4679":[61.5,30.0,20.8,26.1,20.0,12.5],"4680":[31.2,4.8,0.0,0.0,0.0,0.0],"4681":[25.0,0.0,10.0,0.0,0.0,0.0],"4682":[68.6,20.0,26.9,13.8,13.0,0.0],"4683":[null,20.0,10.0,13.3,0.0,5.3],"4684":[66.7,8.0,23.5,10.0,15.0,6.7],"4685":[66.7,18.8,47.1,11.1,10.5,0.0],"4686":[79.3,15.8,30.0,15.8,13.3,4.8],"4688":[66.7,27.8,9.1,4.2,16.7,3.7],"4689":[72.2,0.0,11.1,9.1,0.0,7.7],"4690":[null,null,null,null,null,null],"4691":[43.8,14.3,14.3,0.0,0.0,0.0],"4692":[47.1,6.2,0.0,6.7,23.5,22.7],"4693":[30.8,9.5,5.3,0.0,4.5,0.0],"4694":[26.7,22.7,5.9,5.6,4.8,0.0],"4695":[41.2,12.5,4.8,0.0,10.5,5.6],"4697":[35.3,0.0,4.3,5.3,0.0,0.0],"4700":[64.7,22.2,0.0,22.2,35.7,0.0],"4702":[60.7,13.3,47.6,19.0,23.8,13.0],"4703":[63.0,5.9,11.8,11.1,6.2,0.0],"4704":[71.0,15.8,25.9,33.3,5.3,0.0],"4705":[50.0,5.9,14.3,18.8,0.0,0.0],"4706":[60.7,12.5,5.9,12.5,8.7,0.0],"4708":[23.1,0.0,0.0,5.9,0.0,0.0],"4709":[58.3,23.8,18.2,13.3,0.0,0.0],"4710":[84.4,21.1,17.2,5.3,4.5,0.0],"4711":[29.4,18.8,12.5,0.0,4.8,0.0],"4713":[61.3,20.8,17.4,26.3,10.7,0.0],"4714":[53.8,10.5,5.3,0.0,5.3,0.0],"4715":[57.1,52.2,18.8,40.0,29.4,14.3],"4718":[65.4,13.3,30.4,4.5,16.7,5.3],"4719":[83.3,25.0,33.3,4.5,23.8,0.0],"4720":[40.0,0.0,7.7,7.1,0.0,0.0],"4723":[21.4,5.3,21.1,11.1,17.6,0.0],"4724":[null,0.0,0.0,0.0,0.0,0.0],"4725":[30.8,5.0,10.0,10.0,0.0,5.6],"4726":[20.0,8.3,14.3,11.1,0.0,null],"4727":[35.7,12.5,15.8,11.8,10.5,0.0],"4728":[66.7,4.8,20.0,6.2,0.0,0.0],"4729":[null,null,20.0,0.0,20.0,0.0],"4730":[66.7,33.3,22.2,6.7,0.0,0.0],"4731":[53.8,4.3,0.0,17.6,4.8,0.0],"4732":[70.4,10.5,17.2,11.1,0.0,0.0],"4733":[50.0,17.6,21.4,7.7,0.0,0.0],"4734":[65.4,29.4,36.4,25.0,8.7,5.3],"4735":[31.2,5.0,26.1,20.0,7.7,0.0],"4736":[83.3,36.8,23.1,24.1,26.1,0.0],"4737":[61.9,27.3,7.1,23.1,9.1,0.0],"4738":[70.4,25.0,7.7,4.5,10.0,0.0],"4739":[66.7,15.4,38.5,16.0,15.0,0.0],"4740":[42.9,9.5,9.5,4.8,4.8,6.2],"4743":[68.0,17.4,45.5,9.1,4.8,0.0],"4744":[22.2,11.8,6.7,0.0,10.5,0.0],"4746":[70.6,17.6,15.0,15.8,0.0,0.0],"4747":[35.7,4.3,4.8,5.9,0.0,0.0],"4748":[83.3,16.7,13.0,5.3,4.8,0.0],"4750":[40.0,23.1,5.0,0.0,12.5,0.0],"4752":[13.3,3.4,0.0,0.0,4.2,0.0],"4753":[28.6,5.6,5.9,0.0,0.0,0.0],"4754":[67.7,19.0,14.3,27.3,14.3,0.0],"4756":[null,null,null,null,null,null],"4757":[82.1,23.8,8.7,23.5,4.5,15.8],"4758":[57.1,18.8,30.8,0.0,16.7,7.1],"4759":[86.4,11.8,19.0,0.0,6.2,0.0],"4760":[78.6,26.3,28.6,21.1,16.0,6.2],"4761":[50.0,8.3,28.0,8.7,5.6,0.0],"4762":[90.3,12.5,38.9,22.2,15.4,13.0],"4764":[57.1,0.0,35.3,10.0,0.0,5.9],"4765":[50.0,25.0,16.7,11.8,4.8,0.0],"4766":[27.3,7.7,10.0,7.7,0.0,0.0],"4769":[56.5,17.9,28.0,22.2,4.2,4.3],"4771":[81.8,22.2,13.0,13.0,4.8,0.0],"4772":[69.0,12.5,21.1,38.1,23.5,0.0],"4773":[58.1,3.7,7.7,0.0,10.0,0.0],"4775":[76.5,13.3,23.1,0.0,6.7,8.3],"4776":[77.1,12.5,21.7,17.4,14.3,0.0],"4778":[25.0,5.6,23.1,8.3,17.6,0.0],"4779":[33.3,12.5,15.0,5.0,12.5,0.0],"4781":[44.4,10.0,9.1,8.3,0.0,0.0],"4782":[33.3,25.0,5.9,0.0,0.0,0.0],"4784":[30.0,23.5,11.1,0.0,5.0,0.0],"4785":[7.1,5.6,15.8,0.0,0.0,0.0],"4786":[74.1,30.0,30.0,15.8,11.8,0.0],"4787":[71.4,30.0,20.8,19.2,9.5,0.0],"4788":[59.3,12.0,12.0,4.8,4.0,0.0],"4789":[53.8,13.3,15.8,10.5,6.2,0.0],"4790":[76.9,15.0,5.0,4.2,5.9,5.0],"4791":[45.5,15.0,17.6,19.0,5.6,11.8],"4792":[28.6,10.0,33.3,5.0,0.0,14.3],"4793":[65.2,27.3,16.0,22.2,3.7,0.0],"4794":[80.8,23.8,27.6,11.1,9.1,0.0],"4796":[79.3,10.0,30.0,16.7,4.5,5.0],"4797":[73.9,27.3,17.6,14.3,4.8,4.8],"4798":[67.9,17.4,28.6,18.8,9.1,0.0],"4803":[30.0,0.0,0.0,0.0,0.0,0.0],"4804":[66.7,13.3,25.0,16.7,12.5,16.7],"4808":[73.3,11.5,16.7,18.2,17.9,0.0],"4809":[23.1,7.7,20.0,17.6,7.1,9.1],"4811":[33.3,12.0,18.5,20.8,0.0,0.0],"4812":[88.2,33.3,6.2,27.8,21.1,0.0],"4813":[53.3,0.0,5.3,5.9,0.0,0.0],"4815":[25.0,13.3,20.0,30.8,6.7,0.0],"4816":[57.9,21.4,0.0,21.1,6.2,5.0],"4817":[63.2,13.3,29.4,5.9,0.0,0.0],"4818":[null,null,null,42.9,null,null],"4819":[55.6,15.8,22.2,20.0,4.5,0.0],"4821":[33.3,10.0,15.8,13.6,9.1,10.0],"4822":[55.2,21.7,12.5,7.7,0.0,0.0],"4823":[60.0,47.1,29.4,13.3,6.7,0.0],"4824":[64.3,26.1,26.9,28.0,18.2,5.3],"4825":[72.7,12.5,25.0,15.8,26.3,0.0],"4826":[94.6,28.6,12.9,26.9,5.6,13.6],"4828":[65.4,37.5,26.3,13.0,4.2,10.0],"4831":[63.6,7.1,30.0,13.3,14.3,11.1],"4832":[60.0,41.2,31.6,40.0,12.5,9.5],"4834":[85.0,27.3,9.5,17.4,0.0,0.0],"4835":[26.7,4.3,8.3,4.2,0.0,0.0],"4836":[33.3,20.0,0.0,20.0,0.0,0.0],"4837":[35.7,10.5,8.7,0.0,5.6,0.0],"4839":[45.5,15.0,17.6,4.3,5.0,17.6],"4840":[47.1,10.0,5.3,12.5,0.0,5.3],"4842":[52.9,0.0,0.0,7.7,0.0,5.9],"4843":[40.0,25.0,0.0,28.6,12.5,0.0],"4844":[28.6,8.3,0.0,0.0,0.0,0.0],"4845":[64.0,35.0,20.0,28.6,17.6,0.0],"4846":[16.7,8.3,12.5,0.0,0.0,0.0],"4847":[73.9,16.7,38.1,6.7,10.5,0.0],"4848":[64.3,35.3,20.0,0.0,8.3,5.0],"4850":[55.6,37.5,20.0,31.2,7.1,6.2],"4851":[65.2,20.8,23.8,25.0,12.5,6.7],"4852":[69.2,22.2,28.6,30.0,25.0,5.0],"4853":[37.5,23.1,0.0,0.0,0.0,0.0],"4854":[40.0,16.7,null,0.0,null,20.0],"4856":[66.7,19.0,20.0,16.0,10.7,9.1],"4857":[61.1,50.0,25.0,9.1,8.3,0.0],"4861":[43.8,21.4,0.0,11.8,0.0,0.0],"4863":[20.0,10.0,18.2,12.5,5.9,6.2],"4864":[50.0,5.3,5.9,15.0,5.9,0.0],"4865":[63.6,9.5,0.0,7.1,0.0,7.1],"4866":[50.0,0.0,22.2,0.0,0.0,0.0],"4871":[38.5,5.3,15.8,6.7,0.0,0.0],"4872":[45.5,9.5,21.7,3.8,5.9,0.0],"4873":[73.1,22.7,6.2,8.3,0.0,0.0],"4874":[23.1,9.1,5.6,null,null,null],"4875":[50.0,0.0,27.8,5.3,0.0,0.0],"4876":[50.0,5.3,9.5,12.5,0.0,0.0],"4877":[68.0,5.0,42.1,21.1,14.3,4.8],"4878":[33.3,7.7,25.0,6.2,9.1,0.0],"4879":[21.1,15.0,5.0,11.1,0.0,0.0],"4880":[33.3,0.0,10.0,7.1,0.0,0.0],"4882":[16.7,15.8,9.5,10.0,5.0,0.0],"4883":[68.8,21.4,13.3,21.4,5.3,0.0],"4884":[50.0,17.4,9.5,5.3,8.7,0.0],"4885":[null,null,null,0.0,null,null],"4886":[87.1,15.0,26.7,29.4,29.4,0.0],"4887":[54.5,5.3,9.1,10.0,3.8,0.0],"4888":[50.0,0.0,11.8,3.8,4.3,0.0],"4889":[50.0,7.7,17.6,8.3,6.7,0.0],"4890":[42.1,9.5,8.3,8.7,4.3,4.5],"4891":[50.0,4.5,5.6,5.3,0.0,0.0],"4892":[46.7,11.1,12.5,5.9,11.8,0.0],"4893":[25.0,17.6,5.6,5.9,0.0,0.0],"4894":[30.8,5.3,0.0,8.7,0.0,0.0],"4895":[42.1,10.5,17.4,8.3,0.0,6.7],"4896":[50.0,9.5,3.8,0.0,14.3,0.0],"4897":[33.3,0.0,11.1,0.0,0.0,null],"4898":[21.4,0.0,7.7,26.7,5.9,5.6],"4899":[33.3,4.8,0.0,15.8,5.6,8.3],"4900":[63.6,6.2,8.7,22.7,0.0,0.0],"4901":[50.0,9.1,11.1,0.0,0.0,0.0],"4902":[41.2,21.7,15.0,3.7,0.0,0.0],"4903":[71.4,35.7,22.2,8.7,9.5,9.5],"4904":[50.0,22.2,22.2,15.8,0.0,0.0],"4905":[33.3,9.1,7.1,0.0,0.0,0.0],"4906":[45.5,12.0,8.3,0.0,4.0,0.0],"4907":[78.4,32.1,22.7,14.3,27.3,9.1],"4908":[84.8,36.4,28.0,19.0,7.1,12.5],"4909":[64.3,11.1,17.6,0.0,6.7,0.0],"4910":[78.8,15.0,40.7,23.8,11.8,0.0],"4911":[40.0,6.2,23.1,0.0,0.0,0.0],"4914":[87.0,26.7,21.1,16.7,16.7,13.3],"4917":[33.3,6.2,4.2,9.5,0.0,0.0],"4918":[50.0,22.7,8.7,0.0,6.9,0.0],"4919":[52.9,16.7,12.5,0.0,14.3,0.0],"4924":[28.6,4.8,0.0,0.0,0.0,0.0],"4925":[52.0,8.7,7.4,29.6,4.5,17.6],"4926":[68.4,60.0,30.0,33.3,13.3,14.3],"4927":[37.5,29.2,18.2,17.6,4.8,0.0],"4928":[69.0,40.0,28.6,27.3,22.2,6.2],"4930":[53.3,20.0,18.2,19.0,17.6,4.3],"4931":[64.5,31.0,15.0,8.0,4.8,5.3],"4932":[71.4,8.7,18.8,20.0,21.1,11.1],"4933":[73.1,22.7,30.0,14.3,15.0,0.0],"4934":[65.5,13.0,13.6,8.7,8.0,0.0],"4936":[76.5,20.0,12.5,6.2,10.0,6.2],"4938":[72.7,22.7,34.8,17.6,11.1,0.0],"4939":[81.2,22.7,30.8,41.7,16.7,9.5],"4940":[0.0,0.0,0.0,7.1,0.0,0.0],"4941":[16.7,12.5,23.1,0.0,10.5,0.0],"4942":[58.3,31.2,6.2,5.0,6.7,7.1],"4943":[28.6,15.0,9.5,11.8,6.2,0.0],"4944":[27.3,6.7,17.4,5.0,0.0,0.0],"4945":[23.1,0.0,21.4,7.7,6.2,0.0],"4947":[7.7,5.0,15.0,0.0,5.6,6.2],"4948":[50.0,19.0,0.0,27.8,9.5,0.0],"4949":[67.7,24.0,18.2,13.0,9.1,6.2],"4950":[68.4,11.1,22.2,10.5,7.4,8.3],"4951":[55.6,7.7,12.5,4.8,9.5,0.0],"4952":[41.7,0.0,10.5,6.7,5.0,0.0],"4953":[76.0,29.6,15.4,16.7,21.1,15.8],"4954":[null,null,null,null,null,null],"4956":[42.9,0.0,0.0,11.1,0.0,null],"4957":[37.5,26.3,15.4,10.5,11.1,0.0],"4958":[68.0,22.7,14.3,18.2,5.3,0.0],"4959":[86.2,18.8,15.8,29.4,15.0,0.0],"4960":[58.6,19.0,25.0,21.4,13.3,8.7],"4961":[77.8,26.3,31.6,21.1,10.5,13.0],"4962":[66.7,21.4,16.7,10.0,20.0,0.0],"4963":[80.8,29.2,26.3,15.4,5.0,0.0],"4964":[null,null,null,null,null,null],"4965":[45.5,6.7,9.1,0.0,14.3,0.0],"4966":[57.1,20.0,15.0,14.8,17.4,0.0],"4967":[72.0,20.8,12.0,23.1,8.0,0.0],"4969":[45.5,14.3,6.7,12.5,0.0,7.7],"4973":[40.0,4.8,15.8,12.5,15.0,5.3],"4974":[76.2,22.2,25.0,31.2,5.9,0.0],"4976":[null,null,0.0,0.0,0.0,6.7],"4977":[45.5,16.7,20.0,15.0,13.0,0.0],"4978":[25.0,12.5,3.8,11.1,3.3,0.0],"4979":[70.6,11.8,14.3,6.2,13.6,0.0],"4980":[65.5,33.3,26.3,13.6,8.0,0.0],"4981":[52.9,10.0,21.7,5.3,9.5,0.0],"4982":[42.9,0.0,7.1,0.0,11.8,0.0],"4983":[83.3,34.6,32.0,19.0,11.1,0.0],"4984":[69.2,5.6,17.6,0.0,5.0,0.0],"4985":[73.3,22.2,28.0,5.9,10.5,0.0],"4987":[27.3,5.3,0.0,0.0,0.0,0.0],"4988":[20.0,4.5,14.3,11.1,9.5,5.3],"4989":[76.5,17.6,14.3,6.2,5.6,6.2],"4990":[null,0.0,0.0,0.0,0.0,0.0],"4991":[57.1,0.0,15.4,5.9,15.0,0.0],"4992":[46.7,9.1,9.1,11.8,3.6,0.0],"4994":[77.3,19.2,10.0,14.3,0.0,0.0],"4995":[50.0,11.1,12.0,4.8,4.3,5.3],"4997":[30.0,11.1,0.0,0.0,10.0,0.0],"4998":[null,null,null,null,null,null],"5000":[44.4,14.3,12.5,4.5,0.0,0.0],"5002":[55.6,22.7,15.4,21.7,18.8,0.0],"5003":[38.5,4.8,9.5,5.6,0.0,0.0],"5004":[42.9,5.0,17.6,20.0,6.2,0.0],"5005":[38.9,5.3,0.0,5.6,5.3,0.0],"5006":[45.5,0.0,28.6,23.5,15.0,0.0],"5007":[46.7,5.3,0.0,5.6,0.0,5.9],"5008":[33.3,11.1,4.8,14.3,5.0,0.0],"5009":[55.6,16.7,26.7,7.1,9.5,0.0],"5010":[63.2,18.8,15.8,13.6,0.0,9.1],"5011":[41.7,0.0,0.0,5.0,0.0,0.0],"5012":[52.4,11.1,20.8,17.6,16.7,0.0],"5013":[52.9,25.0,25.0,26.7,5.6,0.0],"5014":[36.4,11.8,0.0,18.2,0.0,0.0],"5015":[87.1,14.3,32.0,4.0,6.2,5.6],"5016":[74.1,27.8,30.4,26.7,16.7,0.0],"5017":[86.4,30.4,11.8,25.0,27.3,6.7],"5018":[71.4,26.9,13.0,15.4,16.0,13.3],"5019":[47.1,5.6,15.8,4.8,0.0,8.3],"5020":[53.3,18.8,5.9,5.9,5.6,6.2],"5022":[27.3,4.8,0.0,14.3,3.8,0.0],"5023":[70.6,8.3,4.8,0.0,0.0,4.3],"5026":[80.0,20.0,25.0,13.3,18.8,0.0],"5027":[25.0,22.7,10.5,0.0,0.0,0.0],"5028":[85.3,28.0,18.2,28.0,19.0,0.0],"5029":[60.9,31.6,25.0,13.6,4.3,0.0],"5030":[null,null,null,null,null,null],"5031":[37.5,8.3,0.0,7.1,0.0,0.0],"5032":[69.2,17.6,23.1,7.7,5.9,6.7],"5033":[41.7,0.0,0.0,0.0,7.7,0.0],"5034":[68.6,22.2,17.4,26.3,0.0,0.0],"5035":[29.4,14.3,20.8,19.0,13.6,0.0],"5036":[45.5,5.9,0.0,0.0,0.0,0.0],"5037":[33.3,15.4,18.2,11.1,5.6,5.6],"5038":[62.5,16.0,4.3,19.2,9.5,0.0],"5039":[50.0,7.7,9.5,17.9,0.0,null],"5041":[60.0,9.5,4.0,35.7,8.3,0.0],"5042":[67.7,34.6,29.2,17.2,12.5,0.0],"5043":[79.3,16.7,38.5,28.6,20.0,0.0],"5044":[47.8,20.0,21.4,25.0,10.0,0.0],"5045":[46.2,15.0,22.2,5.9,0.0,0.0],"5046":[26.7,0.0,4.5,0.0,11.5,0.0],"5047":[42.9,6.2,0.0,10.0,12.5,0.0],"5048":[27.3,5.0,14.3,15.8,10.5,0.0],"5049":[63.2,27.8,10.5,8.0,4.3,5.6],"5050":[52.9,12.5,10.0,13.3,16.7,0.0],"5051":[75.0,30.0,23.5,28.6,9.5,0.0],"5052":[null,null,null,null,null,0.0],"5053":[66.7,15.0,5.3,5.3,5.3,0.0],"5054":[62.5,25.0,31.2,13.0,10.5,7.7],"5055":[46.2,17.4,30.8,18.5,5.9,4.0],"5056":[null,null,null,null,null,null],"5057":[52.9,6.2,5.6,6.7,0.0,0.0],"5058":[80.8,28.1,31.8,3.7,8.3,16.7],"5060":[46.2,4.8,5.3,0.0,0.0,0.0],"5061":[22.2,0.0,14.3,21.4,11.8,0.0],"5063":[41.7,9.5,5.6,9.5,0.0,0.0],"5064":[56.2,6.2,6.2,4.0,5.9,0.0],"5065":[8.3,6.2,5.0,20.0,6.7,7.1],"5066":[72.7,23.5,10.5,0.0,14.3,0.0],"5067":[58.3,4.8,18.2,0.0,9.1,7.7],"5068":[80.0,26.9,40.0,25.9,31.2,0.0],"5069":[57.9,8.3,17.6,12.5,0.0,0.0],"5070":[53.8,4.5,10.0,6.2,0.0,16.7],"5071":[61.5,10.5,5.6,11.8,0.0,0.0],"5072":[null,0.0,0.0,20.0,0.0,null],"5073":[30.8,38.1,4.8,9.1,5.6,0.0],"5074":[44.4,0.0,0.0,4.5,5.0,0.0],"5075":[53.1,12.0,19.2,26.1,9.1,0.0],"5076":[57.1,11.8,20.0,11.1,12.5,0.0],"5077":[0.0,0.0,0.0,0.0,0.0,0.0],"5078":[54.5,5.9,0.0,0.0,0.0,0.0],"5079":[14.3,14.3,11.8,12.5,6.7,6.2],"5081":[33.3,19.0,14.3,15.0,8.3,0.0],"5082":[20.0,10.5,7.7,0.0,5.3,9.1],"5083":[63.6,7.1,6.7,26.7,7.1,0.0],"5084":[85.7,26.7,38.9,9.5,13.3,6.2],"5085":[33.3,4.2,0.0,12.5,8.3,0.0],"5086":[50.0,15.8,5.9,19.0,4.8,7.7],"5087":[52.0,23.8,11.8,10.0,20.0,0.0],"5088":[63.6,40.9,30.0,30.8,19.0,6.2],"5089":[75.9,19.0,9.1,19.0,4.8,0.0],"5090":[47.6,8.0,21.4,15.8,0.0,0.0],"5091":[64.7,16.7,7.1,6.7,7.1,5.6],"5092":[50.0,21.1,30.0,21.7,13.3,7.1],"5093":[59.3,3.4,18.8,18.2,0.0,0.0],"5095":[63.2,23.5,23.1,20.0,12.5,0.0],"5096":[71.4,8.7,25.0,4.3,5.0,0.0],"5098":[46.7,0.0,13.6,13.6,6.2,0.0],"5100":[23.1,5.9,11.8,0.0,5.6,0.0],"5101":[28.6,0.0,0.0,0.0,0.0,0.0],"5102":[52.6,4.5,5.3,0.0,0.0,0.0],"5103":[10.0,6.2,6.2,16.7,0.0,0.0],"5104":[38.1,26.3,22.2,22.2,6.2,15.4],"5105":[30.0,15.0,0.0,0.0,0.0,0.0],"5106":[47.1,0.0,17.4,13.6,5.0,0.0],"5107":[57.1,11.1,7.7,14.3,10.0,7.1],"5108":[null,null,null,0.0,null,null],"5109":[21.4,9.1,17.4,0.0,15.8,0.0],"5110":[45.5,19.0,3.6,11.1,8.0,0.0],"5111":[12.5,22.2,0.0,7.1,7.1,0.0],"5112":[48.0,38.1,15.0,9.1,20.0,0.0],"5113":[20.0,9.1,8.3,0.0,0.0,0.0],"5114":[51.9,20.0,16.7,36.4,8.0,0.0],"5115":[66.7,13.3,13.3,6.7,6.7,5.3],"5117":[16.7,7.1,27.3,0.0,0.0,0.0],"5118":[40.0,6.2,11.1,5.3,0.0,0.0],"5120":[53.3,0.0,8.0,5.9,0.0,0.0],"5121":[72.7,11.8,10.0,28.6,10.5,0.0],"5122":[16.7,28.6,0.0,0.0,null,0.0],"5123":[25.0,0.0,5.9,0.0,0.0,0.0],"5124":[33.3,null,0.0,0.0,null,0.0],"5125":[57.7,10.0,18.2,28.6,5.3,0.0],"5126":[66.7,5.3,23.3,21.7,21.7,8.7],"5127":[25.0,20.0,4.5,4.3,0.0,0.0],"5128":[14.3,9.1,25.0,9.1,0.0,0.0],"5129":[38.5,15.4,33.3,21.4,0.0,0.0],"5130":[44.4,0.0,0.0,4.8,0.0,0.0],"5131":[18.2,0.0,0.0,5.0,0.0,9.1],"5132":[51.4,36.0,20.8,27.6,0.0,6.7],"5133":[40.0,18.2,14.3,4.5,0.0,0.0],"5134":[65.0,5.9,4.2,0.0,5.0,0.0],"5135":[36.4,31.2,30.0,10.5,9.1,0.0],"5136":[60.0,0.0,7.7,30.0,18.2,0.0],"5137":[25.0,33.3,9.1,11.1,0.0,0.0],"5138":[null,8.3,0.0,0.0,0.0,0.0],"5139":[58.8,18.2,20.0,9.5,10.0,13.3],"5140":[33.3,0.0,9.5,0.0,5.0,0.0],"5141":[79.2,16.7,14.3,5.6,17.4,0.0],"5142":[72.5,16.7,37.5,27.6,16.7,6.7],"5143":[22.2,4.8,10.5,0.0,0.0,0.0],"5144":[27.3,10.0,0.0,5.9,0.0,0.0],"5145":[66.7,21.1,20.0,16.7,5.0,12.5],"5146":[41.7,6.2,11.1,0.0,0.0,0.0],"5147":[0.0,0.0,0.0,null,0.0,0.0],"5148":[30.8,0.0,13.3,15.4,0.0,0.0],"5150":[57.9,22.2,28.6,11.8,5.0,10.5],"5151":[15.4,5.0,0.0,0.0,0.0,0.0],"5152":[22.2,6.7,0.0,0.0,0.0,0.0],"5153":[20.0,8.7,0.0,10.0,4.5,0.0],"5154":[36.4,13.3,0.0,6.2,5.6,6.2],"5155":[40.0,12.5,9.5,11.8,19.0,6.7],"5156":[58.3,17.6,26.7,8.3,6.7,0.0],"5157":[36.8,8.7,10.0,6.2,10.0,0.0],"5158":[55.0,20.0,23.5,29.4,13.3,5.9],"5160":[43.8,14.3,28.6,10.0,5.0,20.0],"5161":[66.7,11.1,5.3,4.8,11.8,0.0],"5162":[12.5,0.0,9.1,0.0,0.0,0.0],"5163":[65.0,12.5,17.6,14.3,14.3,5.0],"5164":[0.0,0.0,0.0,0.0,0.0,0.0],"5165":[33.3,10.0,10.5,0.0,0.0,0.0],"5166":[62.5,27.3,16.7,11.1,0.0,0.0],"5167":[36.4,12.5,6.7,6.2,0.0,0.0],"5169":[40.0,9.1,7.7,0.0,6.7,0.0],"5170":[33.3,7.1,7.7,0.0,8.3,0.0],"5171":[28.6,0.0,0.0,10.0,15.0,0.0],"5172":[50.0,0.0,0.0,10.5,0.0,5.6],"5173":[58.3,5.0,7.7,11.8,0.0,0.0],"5174":[77.8,37.5,27.3,0.0,0.0,0.0],"5175":[0.0,22.2,0.0,0.0,0.0,0.0],"5176":[16.7,0.0,0.0,0.0,0.0,0.0],"5177":[15.4,5.0,4.3,0.0,5.0,7.1],"5178":[12.5,11.1,0.0,0.0,3.6,0.0],"5179":[61.5,18.8,0.0,23.5,12.5,0.0],"5180":[62.5,11.1,0.0,0.0,9.1,0.0],"5181":[53.3,5.9,17.6,13.3,0.0,0.0],"5182":[28.6,33.3,7.7,5.6,13.3,0.0],"5183":[40.0,0.0,4.8,5.6,0.0,0.0],"5184":[0.0,22.2,14.3,0.0,0.0,0.0],"5185":[36.8,0.0,10.5,5.6,5.9,0.0],"5186":[36.4,0.0,5.6,0.0,0.0,5.3],"5187":[22.2,8.0,0.0,0.0,0.0,5.0],"5188":[43.5,16.0,25.0,20.0,4.0,15.4],"5189":[46.2,7.1,23.1,0.0,0.0,0.0],"5190":[13.3,18.8,21.1,0.0,0.0,5.6],"5191":[66.7,20.0,22.2,14.3,12.5,4.5],"5192":[42.9,35.7,5.0,30.0,6.7,6.7],"5193":[66.7,16.7,33.3,9.1,20.0,0.0],"5194":[72.7,0.0,13.3,7.1,0.0,0.0],"5195":[60.0,15.0,20.0,0.0,0.0,0.0],"5196":[65.0,50.0,13.3,26.7,23.5,10.5],"5197":[61.1,19.0,26.3,31.6,6.7,3.4],"5198":[0.0,15.8,0.0,0.0,0.0,0.0],"5199":[41.7,7.1,5.6,23.5,17.6,0.0],"5200":[null,0.0,0.0,0.0,0.0,0.0],"5201":[22.2,0.0,0.0,0.0,0.0,0.0],"5202":[null,null,null,null,null,null],"5203":[40.0,9.5,14.3,9.5,5.6,0.0],"5204":[null,null,null,null,null,null],"5205":[72.7,19.0,7.1,5.0,0.0,0.0],"5206":[27.8,4.8,14.3,20.0,5.6,0.0],"5207":[33.3,15.0,9.5,4.8,6.7,0.0],"5208":[50.0,16.7,4.3,5.6,0.0,0.0],"5209":[null,null,0.0,0.0,0.0,0.0],"5210":[57.1,14.3,0.0,0.0,0.0,0.0],"5211":[0.0,5.6,5.6,0.0,0.0,0.0],"5212":[38.5,9.1,9.5,4.2,6.2,0.0],"5213":[75.0,10.0,27.8,4.5,4.2,0.0],"5214":[50.0,9.5,13.0,23.1,5.3,0.0],"5215":[null,null,null,null,null,null],"5216":[46.4,12.5,26.9,20.0,20.0,5.9],"5217":[76.0,29.4,16.7,30.0,15.0,4.2],"5218":[66.7,21.4,17.6,20.0,0.0,7.1],"5219":[20.0,14.3,12.5,10.0,12.5,0.0],"5220":[66.7,16.7,15.4,26.9,13.0,13.3],"5221":[81.8,25.0,35.0,5.9,0.0,12.5],"5222":[57.7,15.4,12.5,17.6,0.0,0.0],"5223":[38.5,16.7,4.2,11.1,0.0,0.0],"5224":[73.3,20.0,21.1,6.7,11.8,5.0],"5226":[68.2,16.0,26.3,9.5,0.0,0.0],"5227":[null,null,null,null,null,null],"5228":[66.7,null,42.9,null,0.0,0.0],"5229":[73.9,14.3,18.2,8.0,8.0,10.5],"5230":[33.3,0.0,18.2,0.0,0.0,0.0],"5231":[64.3,26.7,0.0,5.3,0.0,9.1],"5232":[38.5,9.5,5.9,0.0,7.1,0.0],"5234":[40.0,5.3,22.2,25.0,14.3,6.2],"5235":[16.7,0.0,0.0,0.0,0.0,0.0],"5236":[null,null,null,5.1,0.0,0.0],"5237":[25.0,13.3,7.1,8.3,11.8,5.3],"5238":[68.4,12.0,14.3,33.3,7.7,0.0],"5239":[50.0,29.4,12.0,0.0,10.0,0.0],"5240":[40.0,7.1,5.9,0.0,0.0,5.0],"5241":[22.2,7.7,0.0,0.0,8.3,0.0],"5242":[41.7,5.0,4.2,0.0,11.8,0.0],"5243":[52.4,15.8,14.3,15.0,13.6,0.0],"5244":[40.0,0.0,0.0,0.0,0.0,0.0],"5245":[33.3,0.0,12.5,16.7,15.0,0.0],"5246":[42.9,14.3,0.0,12.5,7.1,0.0],"5247":[11.1,14.3,0.0,0.0,0.0,0.0],"5248":[12.5,7.7,6.2,0.0,0.0,0.0],"5249":[28.6,5.0,16.7,0.0,0.0,0.0],"5250":[30.0,13.3,5.9,6.7,0.0,8.3],"5251":[0.0,0.0,0.0,0.0,0.0,0.0],"5252":[63.6,0.0,11.8,20.0,14.3,9.1],"5253":[36.4,20.0,18.2,25.0,18.2,3.7],"5254":[null,null,4.8,8.3,0.0,0.0],"5255":[63.2,27.3,11.5,29.4,15.0,10.5],"5256":[61.3,32.0,13.0,25.0,3.7,10.0],"5257":[59.1,28.6,38.9,34.6,20.0,0.0],"5258":[40.0,5.3,15.4,0.0,6.7,0.0],"5259":[36.4,5.0,5.0,0.0,6.2,0.0],"5261":[36.4,7.1,0.0,0.0,0.0,0.0],"5262":[22.2,0.0,5.9,0.0,5.3,0.0],"5263":[25.0,11.8,0.0,0.0,0.0,0.0],"5264":[15.4,10.5,0.0,11.8,0.0,4.5],"5265":[9.1,7.7,5.9,12.5,0.0,0.0],"5266":[23.1,6.7,0.0,0.0,15.4,0.0],"5267":[80.8,28.6,22.2,33.3,30.0,5.6],"5268":[null,12.5,0.0,null,22.2,0.0],"5269":[76.5,23.8,10.5,28.6,0.0,0.0],"5270":[10.0,17.6,6.7,0.0,0.0,0.0],"5271":[28.6,9.1,0.0,0.0,0.0,0.0],"5272":[33.3,9.1,14.3,0.0,0.0,0.0],"5273":[37.5,17.6,9.5,0.0,13.6,0.0],"5274":[50.0,8.3,9.1,13.6,6.7,0.0],"5275":[52.9,18.8,16.7,16.7,9.5,0.0],"5276":[50.0,5.6,4.5,16.7,10.5,0.0],"5277":[50.0,21.1,14.3,25.0,0.0,6.2],"5278":[86.4,15.8,25.0,6.2,19.0,7.1],"5279":[46.2,33.3,25.0,11.1,7.1,0.0],"5280":[66.7,25.0,17.6,12.5,10.5,0.0],"5281":[53.3,30.8,31.6,7.1,0.0,6.2],"5282":[50.0,0.0,10.5,11.1,0.0,0.0],"5283":[42.9,0.0,0.0,7.7,6.2,0.0],"5284":[20.0,6.7,10.0,5.9,0.0,0.0],"5285":[12.5,0.0,0.0,0.0,0.0,0.0],"5286":[21.4,11.5,19.0,10.5,0.0,6.7],"5287":[12.5,25.0,0.0,0.0,0.0,0.0],"5288":[20.0,6.2,0.0,0.0,5.0,0.0],"5289":[64.3,4.2,9.5,8.7,4.8,0.0],"5290":[14.3,0.0,9.1,22.2,0.0,0.0],"5291":[11.1,0.0,5.9,6.2,0.0,0.0],"5292":[26.7,0.0,5.3,0.0,0.0,0.0],"5293":[null,0.0,0.0,null,0.0,0.0],"5294":[38.5,3.8,13.0,0.0,0.0,0.0],"5295":[10.0,0.0,0.0,10.0,0.0,0.0],"5296":[31.2,12.5,11.5,5.0,15.4,7.7],"5297":[null,0.0,4.8,0.0,0.0,0.0],"5298":[60.9,20.0,21.7,9.5,18.8,9.1],"5299":[66.7,0.0,11.8,0.0,0.0,0.0],"5300":[14.3,6.2,11.8,0.0,0.0,0.0],"5301":[44.4,15.0,4.0,0.0,0.0,0.0],"5302":[37.5,0.0,0.0,0.0,0.0,0.0],"5303":[52.9,12.5,5.3,20.8,4.5,0.0],"5304":[null,0.0,null,0.0,0.0,2.2],"5305":[0.0,11.1,0.0,0.0,0.0,0.0],"5306":[7.7,5.9,0.0,0.0,0.0,0.0],"5307":[50.0,5.9,15.0,0.0,8.3,0.0],"5308":[15.4,0.0,5.3,14.3,4.3,0.0],"5309":[null,null,null,0.0,0.0,0.0],"5310":[44.4,0.0,7.7,0.0,0.0,0.0],"5311":[60.0,11.1,16.7,7.7,4.3,0.0],"5312":[22.2,0.0,0.0,0.0,5.6,0.0],"5313":[null,null,null,5.0,12.5,0.0],"5314":[null,null,null,0.0,0.0,0.0],"5315":[9.1,0.0,6.2,0.0,0.0,0.0],"5316":[null,null,null,11.8,2.2,5.1],"5317":[36.4,7.1,9.1,9.1,4.5,0.0],"5318":[null,null,0.0,0.0,0.0,0.0],"5319":[50.0,16.7,16.7,26.3,0.0,9.5],"5320":[0.0,6.7,0.0,7.1,0.0,0.0],"5321":[30.0,14.3,38.5,0.0,7.1,4.8],"5322":[0.0,0.0,0.0,0.0,0.0,0.0],"5323":[44.4,9.1,0.0,9.1,18.2,3.6],"5324":[14.3,0.0,0.0,0.0,0.0,0.0],"5325":[null,null,null,0.0,0.0,2.6],"5326":[null,null,null,0.0,0.0,0.0],"5327":[null,null,null,0.0,0.0,0.0],"5328":[null,null,null,17.4,0.0,0.0],"5329":[null,null,null,4.0,4.8,3.1],"5330":[80.0,18.8,27.8,20.0,9.5,5.0],"5331":[50.0,12.5,15.4,0.0,18.8,4.8],"5332":[28.6,0.0,0.0,0.0,7.7,0.0],"5333":[66.7,14.3,12.5,4.0,8.3,5.0],"5334":[7.7,0.0,5.0,7.7,0.0,0.0],"5335":[null,null,3.6,4.5,6.9,3.6],"5336":[0.0,0.0,0.0,0.0,10.0,0.0],"5337":[null,null,null,9.5,0.0,0.0],"5338":[null,null,null,11.1,4.2,0.0],"5339":[null,null,null,6.9,9.1,11.4],"5340":[null,null,null,2.6,5.6,0.0],"5341":[null,null,null,null,0.0,0.0],"5342":[null,null,null,0.0,0.0,0.0],"5343":[null,null,null,12.5,0.0,0.0],"5344":[null,null,null,6.7,4.2,2.0],"5345":[null,null,null,6.7,0.0,0.0],"5346":[null,null,null,0.0,0.0,0.0],"5347":[null,null,null,0.0,0.0,0.0],"5348":[null,null,null,0.0,0.0,3.6],"5349":[null,null,null,0.0,0.0,0.0],"5350":[12.5,0.0,10.0,12.5,0.0,0.0],"5351":[null,null,null,0.0,6.7,2.5],"5352":[null,null,null,11.5,7.7,0.0],"5353":[null,null,null,null,0.0,0.0],"5354":[null,null,null,0.0,0.0,0.0],"5355":[null,null,0.0,11.1,7.1,0.0],"5356":[null,null,null,17.6,12.1,0.0],"5357":[null,null,null,0.0,0.0,0.0],"5358":[20.0,0.0,0.0,0.0,0.0,0.0],"5359":[20.0,0.0,0.0,6.2,0.0,0.0],"5360":[null,null,null,4.8,0.0,0.0],"5361":[null,null,null,0.0,0.0,0.0],"5362":[null,null,null,5.9,0.0,0.0],"5363":[null,null,null,null,null,0.0],"5364":[null,null,null,null,null,0.0],"5365":[null,null,null,0.0,0.0,0.0],"5366":[null,null,null,null,null,0.0],"5367":[null,null,null,0.0,0.0,0.0],"5368":[null,null,null,25.0,0.0,0.0],"5369":[null,null,null,0.0,0.0,2.4],"5370":[null,null,null,0.0,0.0,0.0],"5371":[null,null,null,0.0,0.0,0.0],"5372":[null,null,null,null,0.0,1.4],"5373":[null,null,null,0.0,0.0,0.0],"5374":[null,null,null,0.0,0.0,0.0],"5375":[null,null,null,0.0,0.0,0.0],"5376":[null,null,0.0,0.0,7.7,3.3],"5377":[null,null,null,null,9.1,0.0],"5378":[null,null,null,null,0.0,0.0],"5379":[null,null,null,null,null,0.0],"5380":[null,null,null,null,null,0.0],"5381":[null,null,null,7.1,5.6,0.0],"5382":[null,null,null,0.0,5.0,2.1],"5383":[null,null,null,null,null,0.0],"5384":[null,null,null,null,null,2.7],"5385":[null,null,null,0.0,0.0,0.0],"5386":[null,null,null,0.0,0.0,0.0],"5387":[null,null,null,0.0,0.0,0.0],"5388":[null,null,null,7.7,5.3,0.0],"5389":[null,null,null,null,null,0.0],"5390":[null,null,null,null,0.0,0.0],"5391":[null,null,null,0.0,0.0,0.0],"5392":[null,null,null,null,null,0.0],"5393":[null,null,null,null,null,0.0],"5394":[null,null,null,null,null,0.0],"5395":[null,null,null,null,null,0.0],"5396":[null,null,null,null,null,1.3],"5397":[null,null,null,null,null,0.0],"5398":[null,null,null,0.0,0.0,1.2],"5399":[null,null,null,null,null,0.0],"5400":[null,null,null,null,null,0.0],"5401":[null,null,null,null,null,1.5],"5402":[null,null,null,null,null,0.0],"5403":[null,null,null,null,null,0.0],"5404":[null,null,null,null,null,0.0],"5405":[null,null,null,null,null,0.0],"5406":[null,null,null,null,null,0.0],"5407":[null,null,null,null,null,0.0],"5408":[null,null,null,null,null,0.0],"5409":[null,null,null,null,null,0.0],"5410":[null,null,null,null,null,0.0],"5411":[null,null,null,null,null,0.0],"5412":[null,null,null,null,null,0.0],"5413":[null,null,null,null,null,0.0],"5414":[null,null,null,null,null,0.0],"5415":[null,null,null,null,null,0.0],"5416":[null,null,null,null,null,2.9],"5417":[null,null,null,null,null,0.0],"5418":[null,null,null,null,null,0.0],"5419":[null,null,null,null,null,0.0],"5420":[null,null,null,null,null,0.0],"5421":[null,null,null,null,null,null],"5422":[null,null,null,null,null,null],"5423":[null,null,null,null,null,null],"5424":[null,null,null,null,null,null],"5425":[null,null,null,null,null,null],"5426":[null,null,null,null,null,null],"5427":[null,null,null,null,null,null],"5428":[null,null,null,null,null,null],"5429":[null,null,null,null,null,null],"5430":[null,null,null,null,null,null],"5431":[null,null,null,null,null,null],"5432":[null,null,null,null,null,null],"5433":[null,null,null,null,null,null],"5434":[null,null,null,null,null,null],"5435":[null,null,null,null,null,null],"5436":[null,null,null,null,null,null],"5437":[null,null,null,null,null,null],"5438":[null,null,null,null,null,null],"5439":[null,null,null,null,null,null],"5440":[null,null,null,null,null,null],"5441":[null,null,null,null,null,null],"5442":[null,null,null,null,null,null],"5443":[null,null,null,null,null,null],"5444":[null,null,null,null,null,null]}/*RCW_END*/;
+
+function parsePastedRacelist(text) {
+  // 全角数字・記号を半角へ正規化
+  const t = text
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/．/g, ".").replace(/／/g, "/");
+
+  // 各艇のアンカー: 「F0 L0 0.15」のような F数・L数・平均ST の並び
+  const anchorRe = /F\s*(\d+)\s*L\s*(\d+)\s*(\d?\.\d{2})/g;
+  const anchors = [];
+  let m;
+  while ((m = anchorRe.exec(t)) !== null && anchors.length < 6) {
+    anchors.push({ index: m.index, end: anchorRe.lastIndex, st: parseFloat(m[3]) });
+  }
+  if (anchors.length === 0) {
+    return { boats: [], warnings: ["出走表の形式を認識できませんでした。「F0 L0 0.15」のような並びが含まれる範囲をコピーしてください"] };
+  }
+
+  const boats = [];
+  const warnings = [];
+  anchors.forEach((a, i) => {
+    const blockEnd = i + 1 < anchors.length ? anchors[i + 1].index : Math.min(t.length, a.end + 400);
+    const prevEnd = i === 0 ? 0 : anchors[i - 1].end;
+
+    // --- 選手名と登録番号: 「登録番号/級別」（例: 4852 / A1）の直後、支部/出身地の前まで
+    const head = t.slice(prevEnd, a.index);
+    let name = "";
+    let regno = null;
+    const reg = /(\d{4})\s*\/\s*([AB][12])/.exec(head);
+    if (reg) {
+      regno = reg[1];  // 個人実績（RACER_COURSE_WIN）との照合キー
+      const after = head.slice(reg.index + reg[0].length);
+      const nm = /^[\s\r\n]*([^\d\/\n]{2,12}?)[\s\r\n]*(?:[一-鿿]{2,4}\/)/.exec(after)
+              || /^[\s\r\n]*([^\d\/\n]{2,12})/.exec(after);
+      if (nm) name = nm[1].replace(/[\s　]+/g, " ").trim();
+    }
+
+    // --- アンカー以降の数値トークンを位置で解釈
+    const body = t.slice(a.end, blockEnd);
+    const tokens = (body.match(/\d+(?:\.\d+)?/g) || []).map(s => ({ v: parseFloat(s), dec: s.includes(".") }));
+
+    let nat = null, local = null, motor = null;
+    if (tokens.length >= 6) {
+      nat = tokens[0].v;
+      // 3連率あり形式（全国3列・当地3列）か、2列の簡易形式かを判定
+      const hasSanren = tokens.length >= 12 ||
+        (tokens[3] && tokens[3].dec && tokens[3].v <= 10 && tokens[6] && !tokens[6].dec);
+      local = hasSanren ? (tokens[3] ? tokens[3].v : null) : (tokens[2] ? tokens[2].v : null);
+      // モーターNo（整数トークン）を探し、その直後の小数がモーター2連率
+      const startIdx = hasSanren ? 6 : 4;
+      for (let k = startIdx; k < tokens.length - 1; k++) {
+        if (!tokens[k].dec) { motor = tokens[k + 1].v; break; }
+      }
+    }
+
+    const boat = { name, regno, st: a.st, nat, local, motor, course: COURSE_AVG_FILL[i] };
+    if (boat.nat === null || boat.nat < 0 || boat.nat > 10) { warnings.push(`${i + 1}号艇: 全国勝率を読み取れませんでした`); boat.nat = ""; }
+    if (boat.local === null || boat.local < 0 || boat.local > 10) { warnings.push(`${i + 1}号艇: 当地勝率を読み取れませんでした`); boat.local = ""; }
+    if (boat.motor === null || boat.motor < 0 || boat.motor > 100) { warnings.push(`${i + 1}号艇: モーター2連率を読み取れませんでした`); boat.motor = ""; }
+    if (boat.st < 0.01 || boat.st > 1) { warnings.push(`${i + 1}号艇: 平均STを読み取れませんでした`); boat.st = ""; }
+    boats.push(boat);
+  });
+
+  if (anchors.length < 6) warnings.push(`${anchors.length}艇分しか見つかりませんでした（6艇必要）。コピー範囲を広げて再度お試しください`);
+  return { boats, warnings };
+}
+
+// 出走表の6艇データ(name,regno,nat,local,motor,st[,course])を state.boats へ反映する共通処理。
+// 貼り付け(parsePastedRacelist)・会場レース選択・アップロード(racelist_today.json)の全経路で再利用（物差し一致）。
+// course別1着率は登番で RACER_COURSE_WIN と照合、無ければコース平均で補完（現行 importBtn と同ロジック）。
+// 戻り値: { n: 反映した艇数, nFan: 個人実績で補完した艇数 }。他レースの odds/placeOdds/exactaOdds はクリア。
+function applyRacelistBoats(boats) {
+  const n = Math.min(boats.length, 6);
+  let nFan = 0;
+  for (let i = 0; i < n; i++) {
+    const b = boats[i];
+    let course = (b.course === undefined || b.course === null || b.course === "") ? COURSE_AVG_FILL[i] : b.course;
+    const tbl = b.regno && RACER_COURSE_WIN[b.regno];
+    if (tbl && tbl[i] != null) { course = tbl[i]; nFan++; }
+    state.boats[i] = { name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "" };
+  }
+  state.exactaOdds = {};
+  fillFormFromState();
+  saveState();
+  return { n, nFan };
+}
+
+// 公式オッズページ(oddstf・単勝/複勝)のコピー本文から単勝6・複勝6を抽出する。
+// 判別: 単勝＝単一小数（例 3.4）／複勝＝レンジ（例 1.0-1.2）→ 下限を採用（サーバ ev_check.py と一致）。
+// 「単勝オッズ」「複勝オッズ」の見出しがあればブロック分割で堅牢化し、無ければ全文から書式判別（順序耐性あり）。
+function parsePastedOdds(text) {
+  // 全角→半角・レンジ区切りの表記ゆれを "-" に統一
+  const t = text
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/．/g, ".")
+    .replace(/[－ー−—–〜～~]/g, "-");
+  const warnings = [];
+
+  // 見出しで単勝/複勝ブロックへ分割（可能なら）
+  const tanLabel = t.search(/単勝\s*オッズ/);
+  const fukuLabel = t.search(/複勝\s*オッズ/);
+  let tanRegion = t, fukuRegion = "";
+  if (fukuLabel !== -1 && (tanLabel === -1 || fukuLabel > tanLabel)) {
+    tanRegion = t.slice(tanLabel === -1 ? 0 : tanLabel, fukuLabel);
+    fukuRegion = t.slice(fukuLabel);
+  }
+
+  const RANGE = /(\d+\.\d+)\s*-\s*(\d+\.\d+)/g;   // 複勝レンジ（下限=m[1]）
+  const SINGLE = /\d+\.\d+|\d{4,}/g;              // 単勝: 小数 or 4桁以上の整数（万舟級=1000倍超は公式が小数点省略・T-20260715-01）。号艇(1桁)は拾わない
+
+  // 複勝: 領域（無ければ全文）からレンジを抽出し下限を採用
+  const fukusho = [];
+  let mf;
+  const fukuSrc = fukuRegion || t;
+  while ((mf = RANGE.exec(fukuSrc)) !== null && fukusho.length < 6) {
+    const lo = parseFloat(mf[1]);
+    fukusho.push(lo > 0 ? lo : null);   // 0.0 は欠場・未発売として null
+  }
+
+  // 単勝: 単勝領域からレンジをマスクして単一小数を抽出（順序耐性のため）
+  const tansho = [];
+  let ms;
+  const tanSrc = (tanRegion || t).replace(RANGE, " ");
+  while ((ms = SINGLE.exec(tanSrc)) !== null && tansho.length < 6) {
+    const v = parseFloat(ms[0]);
+    tansho.push(v > 0 ? v : null);
+  }
+
+  if (tansho.length < 6) warnings.push(`単勝オッズを${tansho.length}艇分しか読み取れませんでした（6艇必要）。コピー範囲や欠場をご確認のうえ、不足分は手入力してください`);
+  if (fukusho.length < 6) warnings.push(`複勝オッズを${fukusho.length}艇分しか読み取れませんでした。不足分は手入力してください`);
+  return { tansho, fukusho, warnings };
+}
+
+// 公式2連単オッズページのコピー本文から 2連単オッズ { "i-j": odds } を抽出する（i=1着・j=2着）。
+// 形式（社長サンプルで確定）: 「2連単オッズ」以降、6列（1着=号艇1..6の順）×5行の (2着号艇, オッズ) マトリクス。
+// 各行を左→右・上→下に読むと号艇1..6列を巡回するため、k番目のペアの 1着 = (k mod 6)+1、2着 = 号艇、で復元。
+// 欠場等で通常30件に満たない場合は誤対応を避けるため今回は採用しない（2連単EVは粗い参考のため）。
+function parsePastedExacta(text) {
+  const t = text
+    .replace(/[０-９]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0))
+    .replace(/．/g, ".");
+  const warnings = [];
+  const start = t.search(/2\s*連単\s*オッズ/);
+  if (start === -1) return { exacta: {}, warnings };
+  const end = t.search(/2\s*連複\s*オッズ/);        // 2連複ブロックは対象外（手前で切る）
+  const src = t.slice(start, (end !== -1 && end > start) ? end : undefined);
+  // 「号艇(1-6) 空白 オッズ」のペアのみ抽出（ヘッダの「号艇+選手名」は数値でないので除外される）
+  // オッズは小数 or 整数を許容: 1000倍超（万舟級）は公式が小数点を省いて整数表示（例 1725）＝T-20260715-01
+  const RE = /\b([1-6])\s+(\d+(?:\.\d+)?)/g;
+  const pairs = [];
+  let m;
+  while ((m = RE.exec(src)) !== null) pairs.push({ second: Number(m[1]), odds: parseFloat(m[2]) });
+  const exacta = {};
+  if (pairs.length === 30) {
+    pairs.forEach((p, k) => {
+      const first = (k % 6) + 1;   // 列=1着（号艇1..6の順）
+      if (p.second !== first && p.odds > 0) exacta[`${first}-${p.second}`] = p.odds;
+    });
+  } else {
+    warnings.push(`2連単オッズを${pairs.length}件しか検出できませんでした（通常30件）。欠場やコピー範囲の可能性があるため、今回は2連単EVを見送ります`);
+  }
+  return { exacta, warnings };
+}
+
+/* =========================================================
+   予測ロジック（ルールベース）
+========================================================= */
+// 6艇内での相対値に正規化（0〜1）。invert=true は小さいほど良い指標（ST）
+function normalize(values, invert) {
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  if (max === min) return values.map(() => 0.5); // 全艇同値なら差なし
+  return values.map(v => {
+    const n = (v - min) / (max - min);
+    return invert ? 1 - n : n;
+  });
+}
+
+function predict() {
+  // 1) 入力値の収集
+  const boats = state.boats.map((b, i) => ({
+    lane: i + 1,
+    name: (b.name || "").trim() || `${i + 1}号艇`,
+    raw: Object.fromEntries(METRICS.map(m => [m.key, Number(b[m.key])])),
+  }));
+
+  // 2) 指標ごとに正規化
+  const normByKey = {};
+  METRICS.forEach(m => {
+    normByKey[m.key] = normalize(boats.map(b => b.raw[m.key]), m.invert);
+  });
+
+  // 3) 重み付き合計（ベーススコア 0〜1）
+  const alpha = state.alpha / 100;
+  const cbMax = Math.max(...COURSE_AVG_WIN);
+  boats.forEach((b, i) => {
+    b.parts = METRICS.map(m => {
+      const norm = normByKey[m.key][i];
+      const contrib = norm * (state.weights[m.key] / 100);
+      return { key: m.key, label: m.label, unit: m.unit, raw: b.raw[m.key], norm, weight: state.weights[m.key], contrib };
+    });
+    b.base = b.parts.reduce((s, p) => s + p.contrib, 0);
+
+    // 4) イン有利補正: コース別の全国平均1着率（最大=1コースを1.0として正規化）を混合
+    b.courseBonus = COURSE_AVG_WIN[i] / cbMax;
+    b.final = (1 - alpha) * b.base + alpha * b.courseBonus;
+  });
+
+  // 5) 信頼度（最終スコアを合計100%に正規化）
+  const sum = boats.reduce((s, b) => s + b.final, 0);
+  boats.forEach(b => { b.confidence = sum > 0 ? (b.final / sum) * 100 : 100 / 6; });
+
+  // 6) 順位付け（同点は枠番が内側の艇を上位に）
+  const ranked = [...boats].sort((a, b) => (b.final - a.final) || (a.lane - b.lane));
+  ranked.forEach((b, i) => { b.rank = i + 1; });
+
+  return { ranked, alpha, closeRace: ranked[0].confidence - ranked[1].confidence < CLOSE_RACE_GAP };
+}
+
+/* =========================================================
+   買い目と掛け金配分（信頼度ベースの購入戦略）
+   考え方:
+   1) 予測1位の信頼度でレースの型を判定（鉄板/標準/混戦）
+   2) 型ごとに買うべき券種を選ぶ（混戦は複勝のみ＋見送り推奨）
+   3) 各買い目の推定的中率に比例して金額を配分（100円単位）
+========================================================= */
+// 上位2着以内に入る確率の近似（Harville法: 勝率から順位確率を推定する定番の方法）
+function probTop2(confs, i) {
+  const ci = confs[i];
+  let p = ci;
+  for (let j = 0; j < confs.length; j++) {
+    if (j !== i && confs[j] < 1) p += confs[j] * ci / (1 - confs[j]);
+  }
+  return Math.min(p, 0.99);
+}
+// 2連単 i→j の的中確率の近似（iが1着 × 残りの中でjが2着）
+function probExacta(confs, i, j) {
+  return confs[i] < 1 ? confs[i] * confs[j] / (1 - confs[i]) : 0;
+}
+
+function buildBets(result, budget) {
+  const ranked = result.ranked;
+  const confs = ranked.map(b => b.confidence / 100);
+  const [r1, r2, r3] = ranked;
+
+  // --- 1) レースの型判定 ---
+  let raceType, typeNote, effectiveBudget = budget;
+  if (confs[0] >= 0.40) {
+    raceType = "鉄板";
+    typeNote = `予測1位 ${r1.lane}号艇の信頼度が ${(confs[0] * 100).toFixed(1)}% と高い本命レース。単勝と対抗の複勝を軸に、2連単で上乗せを狙う型。`;
+  } else if (confs[0] >= 0.25) {
+    raceType = "標準";
+    typeNote = `予測1位 ${r1.lane}号艇の信頼度は ${(confs[0] * 100).toFixed(1)}%。単勝＋複勝で手堅く、2連単は絞る型。`;
+  } else {
+    raceType = "混戦";
+    effectiveBudget = Math.max(100, Math.round(budget / 2 / 100) * 100);
+    typeNote = `予測1位でも信頼度 ${(confs[0] * 100).toFixed(1)}% の混戦。無理は禁物 — **見送りが第一候補**。買うなら的中しやすい複勝のみ・予算の半分（${effectiveBudget.toLocaleString()}円）までに抑える型。`;
+  }
+
+  // --- 2) 型ごとの買い目候補（p = 推定的中率）---
+  let bets;
+  if (raceType === "鉄板") {
+    bets = [
+      { type: "単勝",   target: `${r1.lane}`,            desc: `${r1.name}を信頼`,   p: confs[0] },
+      { type: "2連単", target: `${r1.lane}-${r2.lane}`, desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
+      { type: "2連単", target: `${r1.lane}-${r3.lane}`, desc: "本命→3番手",         p: probExacta(confs, 0, 2) },
+      { type: "複勝",   target: `${r2.lane}`,            desc: "対抗の保険",         p: probTop2(confs, 1) },
+    ];
+  } else if (raceType === "標準") {
+    bets = [
+      { type: "単勝", target: `${r1.lane}`,              desc: `${r1.name}`,        p: confs[0] },
+      { type: "複勝", target: `${r1.lane}`,              desc: "本命の保険",         p: probTop2(confs, 0) },
+      { type: "複勝", target: `${r2.lane}`,              desc: "対抗",               p: probTop2(confs, 1) },
+      { type: "2連単", target: `${r1.lane}-${r2.lane}`,  desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
+    ];
+    if (result.closeRace) {
+      bets.push({ type: "2連単", target: `${r1.lane}-${r3.lane}`, desc: "接戦のため分散", p: probExacta(confs, 0, 2) });
+    }
+  } else {
+    bets = [
+      { type: "複勝", target: `${r1.lane}`, desc: "混戦は複勝で手堅く", p: probTop2(confs, 0) },
+      { type: "複勝", target: `${r2.lane}`, desc: "〃",                 p: probTop2(confs, 1) },
+      { type: "複勝", target: `${r3.lane}`, desc: "〃",                 p: probTop2(confs, 2) },
+    ];
+  }
+
+  // --- 3) 推定的中率に比例して100円単位で配分（最大剰余方式・合計は必ず予算と一致）---
+  const units = Math.floor(effectiveBudget / 100);
+  const pSum = bets.reduce((s, b) => s + b.p, 0);
+  const alloc = bets.map(b => {
+    const exact = pSum > 0 ? (b.p / pSum) * units : units / bets.length;
+    return { ...b, units: Math.floor(exact), rem: exact % 1 };
+  });
+  let used = alloc.reduce((s, b) => s + b.units, 0);
+  const byRem = [...alloc].sort((a, b) => b.rem - a.rem);
+  for (let i = 0; used < units; i = (i + 1) % byRem.length) { byRem[i].units++; used++; }
+  const finalBets = alloc.filter(b => b.units > 0).map(b => ({ ...b, amount: b.units * 100 }));
+
+  return { bets: finalBets, raceType, typeNote, effectiveBudget };
+}
+
+/* =========================================================
+   結果表示
+========================================================= */
+function fmt(n, digits = 3) { return Number(n).toFixed(digits); }
+
+function renderResult(result) {
+  const section = document.getElementById("resultSection");
+  section.hidden = false;
+
+  // --- 順位表 ---
+  const rankWrap = document.getElementById("ranking");
+  rankWrap.innerHTML = "";
+  result.ranked.forEach(b => {
+    const c = LANE_COLORS[b.lane - 1];
+    const card = document.createElement("div");
+    card.className = "rank-card";
+    const closeTag = (b.rank === 1 && result.closeRace) ? `<span class="close-race">⚡接戦</span>` : "";
+    // 単勝オッズが入力されていれば期待値（較正済み勝率×オッズ・表示のみ）を添える
+    const odds = getOdds(b.lane - 1);
+    const pOdds = getPlaceOdds(b.lane - 1);
+    const evRows = [];
+    if (odds !== null) { const ev = calWin(b.confidence) * odds; evRows.push(`単勝 ${odds} → 期待値 ${calWin(b.confidence).toFixed(2)}×${odds}=${ev.toFixed(2)}${evBadge(ev)}`); }
+    if (pOdds !== null) { const ev = calTop2(b.confidence) * pOdds; evRows.push(`複勝 ${pOdds} → 期待値 ${calTop2(b.confidence).toFixed(2)}×${pOdds}=${ev.toFixed(2)}${evBadge(ev)}`); }
+    const evLine = evRows.length ? `<div class="ev-line">${evRows.join("<br>")}</div>` : "";
+    card.innerHTML = `
+      <div class="rank-line">
+        <span class="rank-no">${b.rank}位</span>
+        <span class="lane-chip" style="background:${c.bg};color:${c.fg}">${b.lane}</span>
+        <span class="rank-name">${escapeHtml(b.name)}${closeTag}</span>
+        <span class="conf-wrap">
+          <span class="conf-bar-bg"><span class="conf-bar" style="width:${b.confidence.toFixed(1)}%"></span></span>
+          <span class="conf-num">${b.confidence.toFixed(1)}%</span>
+        </span>
+      </div>
+      ${evLine}
+      <details class="basis">
+        <summary>📖 計算根拠を見る</summary>
+        <div class="table-scroll">
+        <table class="basis-table">
+          <tr><th>指標</th><th>入力値</th><th>相対評価<br>(0〜1)</th><th>重み</th><th>寄与点</th></tr>
+          ${b.parts.map(p => `
+            <tr>
+              <td>${p.label}</td>
+              <td>${p.raw}${p.unit}</td>
+              <td>${fmt(p.norm)}</td>
+              <td>${p.weight}%</td>
+              <td>${fmt(p.contrib)}</td>
+            </tr>`).join("")}
+          <tr><td><b>ベーススコア（合計）</b></td><td colspan="3"></td><td><b>${fmt(b.base)}</b></td></tr>
+          <tr><td>イン有利補正値</td><td colspan="3">${b.lane}コース（全国平均${(COURSE_AVG_WIN[b.lane-1]*100).toFixed(0)}%勝率）</td><td>${fmt(b.courseBonus)}</td></tr>
+          <tr><td><b>最終スコア</b></td><td colspan="3">ベース×${fmt(1-result.alpha,2)} ＋ 補正×${fmt(result.alpha,2)}</td><td><b>${fmt(b.final)}</b></td></tr>
+        </table>
+        </div>
+        <p class="basis-note">相対評価は「6艇の中でどの位置か」（1位=1.0、最下位=0.0）。平均STのみ小さいほど高評価。</p>
+      </details>
+    `;
+    rankWrap.appendChild(card);
+  });
+
+  // --- 買い目 ---
+  const budget = Number(document.getElementById("budget").value);
+  const plan = buildBets(result, budget);
+
+  // レースの型バナー
+  const typeIcon = { "鉄板": "🔒", "標準": "⚖️", "混戦": "🌀" }[plan.raceType];
+  const typeClass = { "鉄板": "t-teppan", "標準": "t-hyojun", "混戦": "t-konsen" }[plan.raceType];
+  const banner = document.getElementById("raceTypeBanner");
+  banner.className = "race-type " + typeClass;
+  banner.innerHTML = `<b>${typeIcon} ${plan.raceType}レース</b> — ${plan.typeNote.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")}`;
+
+  // --- 期待値（EV）表示: 較正済み勝率×オッズ（表示と注記のみ。金額配分には使わない）---
+  const anyOdds = state.boats.some((_, i) => getOdds(i) !== null || getPlaceOdds(i) !== null) || Object.keys(state.exactaOdds || {}).length > 0;
+  const r1boat = result.ranked[0];
+  const r1Odds = getOdds(r1boat.lane - 1);
+  const r1Ev = r1Odds !== null ? calWin(r1boat.confidence) * r1Odds : null;
+  // 券種ごとの期待値セル（単勝=calWin×単勝 / 複勝=calTop2×複勝下限 / 2連単=オッズ源なしで"—"）
+  const evCell = b => {
+    if (b.type === "単勝") {
+      if (r1Odds === null) return "—";
+      return `${calWin(r1boat.confidence).toFixed(2)}×${r1Odds}=${r1Ev.toFixed(2)}${evBadge(r1Ev)}`;
+    }
+    if (b.type === "複勝") {
+      const lane = Number(b.target);
+      const boat = result.ranked.find(r => r.lane === lane);
+      const pOdds = getPlaceOdds(lane - 1);
+      if (!boat || pOdds === null) return "—";
+      const ev = calTop2(boat.confidence) * pOdds;
+      return `${calTop2(boat.confidence).toFixed(2)}×${pOdds}=${ev.toFixed(2)}${evBadge(ev)}`;
+    }
+    if (b.type === "2連単") {
+      const exOdds = getExactaOdds(b.target);
+      if (exOdds === null) return "—";
+      const ev = b.p * exOdds;   // b.p=推定的中率(Harville近似)。2連単EVは粗い参考
+      return `${(b.p * 100).toFixed(1)}%×${exOdds}=${ev.toFixed(2)}${evBadge(ev)}`;
+    }
+    return "—";
+  };
+
+  const table = document.getElementById("betsTable");
+  table.innerHTML = `
+    <tr><th>券種</th><th>買い目</th><th>推定的中率</th>${anyOdds ? "<th>期待値</th>" : ""}<th>メモ</th><th>金額</th></tr>
+    ${plan.bets.map(b => `
+      <tr>
+        <td>${b.type}</td>
+        <td><b>${b.target}</b></td>
+        <td>${(b.p * 100).toFixed(1)}%</td>
+        ${anyOdds ? `<td>${evCell(b)}</td>` : ""}
+        <td style="font-size:.82rem;color:var(--sub)">${b.desc}</td>
+        <td class="amount">${b.amount.toLocaleString()}円</td>
+      </tr>`).join("")}
+  `;
+  const total = plan.bets.reduce((s, b) => s + b.amount, 0);
+  let totalNote =
+    `合計 ${total.toLocaleString()}円 ／ 予算 ${budget.toLocaleString()}円`
+    + (plan.raceType === "混戦" ? `（混戦のため ${plan.effectiveBudget.toLocaleString()}円 に自動減額）` : "")
+    + "　※金額は推定的中率に比例して配分。期待値は表示のみで配分には未反映（配分への反映はフェーズ3.2で判断予定）";
+  if (plan.bets.some(b => b.type === "単勝") && r1Ev !== null && r1Ev < EV_THRESHOLD) {
+    totalNote += "\n⚠ 予測1位はオッズが安く期待値不足（見送り推奨）。それでも買う場合は少額に";
+  }
+  if (!anyOdds) {
+    totalNote += "\nℹ 単勝・複勝オッズを入力すると期待値（買う価値）判定が出ます";
+  }
+  document.getElementById("betsTotal").textContent = totalNote;
+
+  section.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function escapeHtml(s) {
+  return s.replace(/[&<>"']/g, ch => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch]));
+}
+
+/* =========================================================
+   会場・レース選択で出走表を自動入力（T-20260715-02）
+   データ源の優先: アップロード(localStorage) > publish埋め込み。未読込なら現行動作（回帰）
+========================================================= */
+function loadUploadedRacelist() {
+  try {
+    const raw = localStorage.getItem(RACELIST_KEY);
+    if (!raw) return null;
+    const o = JSON.parse(raw);
+    return (o && typeof o === "object") ? o : null;
+  } catch (e) { return null; }
+}
+function getActiveRacelist() {
+  return loadUploadedRacelist() || RACELIST_EMBEDDED || null;
+}
+function racelistDates(data) {
+  if (!data || typeof data !== "object") return [];
+  return Object.keys(data).filter(k => /^\d{8}$/.test(k));
+}
+function todayISO() {
+  const d = new Date(), p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function isoToYmd(iso) { return iso ? iso.replace(/-/g, "") : ""; }
+function fmtYmd(ymd) { return `${ymd.slice(0, 4)}/${ymd.slice(4, 6)}/${ymd.slice(6)}`; }
+// 公式ページのディープリンク（すべて boatrace.jp・新規タブ href 方式＝§5.5）
+function boatraceUrl(kind, jcd, rno, ymd) {
+  return `https://www.boatrace.jp/owpc/pc/race/${kind}?rno=${rno}&jcd=${jcd}&hd=${ymd}`;
+}
+function updateRacelistLinks() {
+  const jcd = document.getElementById("rlVenue").value;
+  const rno = document.getElementById("rlRace").value;
+  const ymd = isoToYmd(document.getElementById("rlDate").value);
+  const valid = jcd && rno && /^\d{8}$/.test(ymd);
+  const mk = (kind, label) => valid
+    ? `<a href="${boatraceUrl(kind, jcd, rno, ymd)}" target="_blank" rel="noopener">${label}</a>`
+    : `<a aria-disabled="true">${label}</a>`;
+  document.getElementById("rlLinks").innerHTML =
+    mk("racelist", "🌐 出走表を開く") +
+    mk("oddstf", "💰 単勝・複勝オッズを開く") +
+    mk("odds2tf", "🎯 2連単オッズを開く");
+}
+function refreshRaceOptions() {
+  const data = getActiveRacelist();
+  const ymd = isoToYmd(document.getElementById("rlDate").value);
+  const jcd = document.getElementById("rlVenue").value;
+  const day = (data && data[ymd]) || null;
+  const rsel = document.getElementById("rlRace");
+  const curR = rsel.value;
+  let opts = "";
+  for (let r = 1; r <= 12; r++) {
+    const has = !!(day && day[`${jcd}-${r}`]);
+    opts += `<option value="${r}">${r}R${has ? " ●" : ""}</option>`;
+  }
+  rsel.innerHTML = opts;
+  if (curR) rsel.value = curR;
+}
+function refreshRacelistUI() {
+  const data = getActiveRacelist();
+  const ymd = isoToYmd(document.getElementById("rlDate").value);
+  const day = (data && data[ymd]) || null;
+  const venuesWithData = new Set();
+  if (day) Object.keys(day).forEach(k => venuesWithData.add(k.split("-")[0]));
+  // 会場プルダウン（全24・データがある会場に●）。選択は可能な限り維持
+  const vsel = document.getElementById("rlVenue");
+  const curV = vsel.value;
+  vsel.innerHTML = Object.keys(JCD_NAMES).map(jcd =>
+    `<option value="${jcd}">${JCD_NAMES[jcd]}${venuesWithData.has(jcd) ? " ●" : ""}</option>`).join("");
+  if (curV && JCD_NAMES[curV]) vsel.value = curV;
+  else if (venuesWithData.size) vsel.value = [...venuesWithData].sort()[0];
+  refreshRaceOptions();
+  // ステータス表示
+  const st = document.getElementById("racelistStatus");
+  const src = loadUploadedRacelist() ? "アップロード" : (RACELIST_EMBEDDED ? "アプリ埋め込み" : null);
+  if (day && Object.keys(day).length) {
+    st.textContent = `✅ ${fmtYmd(ymd)} の出走表: ${venuesWithData.size}会場 ${Object.keys(day).length}レース分（${src}）。会場・レースを選んで取り込めます（●=データあり）。`;
+  } else if (data && racelistDates(data).length) {
+    const ds = racelistDates(data).map(fmtYmd).join("・");
+    st.textContent = `ℹ 読込済みデータの対象日は ${ds} です。日付を合わせてください（現在の選択日にはデータがありません）。`;
+  } else {
+    st.textContent = "ℹ まだ本日の出走表データがありません。下の「📂 本日の出走表データを読み込む」から取り込んでください（未読込でも手入力・貼り付けはそのまま使えます）。";
+  }
+  updateRacelistLinks();
+}
+function handleRacelistJsonText(text, source) {
+  const note = document.getElementById("rlDataNote");
+  if (!text || !text.trim()) {
+    note.className = "import-note warn";
+    note.textContent = "⚠ JSONが空です。racelist_today.json の中身を貼り付けてください。";
+    return false;
+  }
+  let obj;
+  try { obj = JSON.parse(text); }
+  catch (e) {
+    note.className = "import-note warn";
+    note.textContent = `⚠ JSONとして読み取れませんでした（${source}）。ファイルの中身を丸ごとコピーしているか確認してください。`;
+    return false;
+  }
+  const dates = racelistDates(obj);
+  if (dates.length === 0) {
+    note.className = "import-note warn";
+    note.textContent = "⚠ 出走表データの形式ではありません（YYYYMMDD 別のレース一覧が必要）。export_racelist.py が作った JSON を使ってください。";
+    return false;
+  }
+  try { localStorage.setItem(RACELIST_KEY, JSON.stringify(obj)); }
+  catch (e) {
+    note.className = "import-note warn";
+    note.textContent = "⚠ 保存に失敗しました（ブラウザの容量制限の可能性）。JSONが大きすぎないか確認してください。";
+    return false;
+  }
+  const latest = dates.sort().slice(-1)[0];
+  document.getElementById("rlDate").value = `${latest.slice(0, 4)}-${latest.slice(4, 6)}-${latest.slice(6)}`;
+  refreshRacelistUI();
+  const nrace = Object.keys(obj[latest] || {}).length;
+  note.className = "import-note ok";
+  note.textContent = `✅ 出走表データを読み込みました（${source}）。対象日 ${fmtYmd(latest)}・${nrace}レース。上で会場とレースを選んで「取り込む」を押してください。`;
+  return true;
+}
+function applySelectedRace() {
+  const note = document.getElementById("rlNote");
+  const data = getActiveRacelist();
+  const ymd = isoToYmd(document.getElementById("rlDate").value);
+  const jcd = document.getElementById("rlVenue").value;
+  const rno = document.getElementById("rlRace").value;
+  if (!data || racelistDates(data).length === 0) {
+    note.className = "import-note warn";
+    note.textContent = "⚠ 先に本日の出走表データを読み込んでください（下の「📂 本日の出走表データを読み込む」）。";
+    return;
+  }
+  const day = data[ymd];
+  const boats = day && day[`${jcd}-${rno}`];
+  if (!boats || !boats.length) {
+    note.className = "import-note warn";
+    note.textContent = `⚠ ${JCD_NAMES[jcd] || jcd} ${rno}R（${fmtYmd(ymd)}）の出走表がデータにありません。●が付いた会場・レースを選ぶか、日付を確認してください。`;
+    return;
+  }
+  const { n, nFan } = applyRacelistBoats(boats);
+  showErrors([]);
+  const msgs = [`✅ ${JCD_NAMES[jcd] || jcd} ${rno}R の${n}艇を自動入力しました。`];
+  if (nFan > 0) msgs.push(`ℹ コース別1着率: ${nFan}艇は選手個人の公式実績、${n - nFan}艇はコース平均で補完。`);
+  else msgs.push("ℹ コース別1着率はコース平均で補完しています（個人実績と照合できた艇はその値）。");
+  msgs.push("💡 オッズは上の「💰 …オッズを開く」で公式ページを開き、コピーして「📥 オッズを貼り付けて自動入力」に貼ってください（変動するため都度）。");
+  note.className = "import-note ok";
+  note.textContent = msgs.join("\n");
+}
+function initRacelistUI() {
+  const dateEl = document.getElementById("rlDate");
+  const dates = racelistDates(getActiveRacelist());
+  if (dates.length) {
+    const latest = dates.sort().slice(-1)[0];
+    dateEl.value = `${latest.slice(0, 4)}-${latest.slice(4, 6)}-${latest.slice(6)}`;
+  } else {
+    dateEl.value = todayISO();
+  }
+  refreshRacelistUI();
+}
+
+/* =========================================================
+   イベント登録・初期化
+========================================================= */
+function bindEvents() {
+  // 入力のたびに state へ反映して保存
+  document.getElementById("boats").addEventListener("input", e => {
+    const inp = e.target;
+    if (!inp.dataset.field) return;
+    state.boats[Number(inp.dataset.boat)][inp.dataset.field] = inp.value;
+    inp.classList.remove("invalid");
+    saveState();
+  });
+
+  document.getElementById("budget").addEventListener("input", e => {
+    state.budget = Number(e.target.value) || 0;
+    saveState();
+  });
+
+  // 重みスライダー
+  document.getElementById("weightRows").addEventListener("input", e => {
+    const key = e.target.dataset.weight;
+    if (!key) return;
+    state.weights[key] = Number(e.target.value);
+    refreshSettingsUI();
+    saveState();
+  });
+
+  document.getElementById("alphaRange").addEventListener("input", e => {
+    state.alpha = Number(e.target.value);
+    refreshSettingsUI();
+    saveState();
+  });
+
+  // 予測実行（上の「予測する」と設定画面内の「再予測」で共通）
+  function runPrediction() {
+    const { errors, firstBad } = validateInputs();
+    showErrors(errors);
+    if (errors.length > 0) {
+      // エラー箇所へ誘導（重み合計エラー等で対象欄が無い場合はエラーボックスへ）
+      (firstBad || document.getElementById("errorBox"))
+        .scrollIntoView({ behavior: "smooth", block: "center" });
+      return;
+    }
+    const result = predict();
+    renderResult(result);  // renderResult 内で結果画面へ自動スクロール
+    saveState();
+  }
+  document.getElementById("predictBtn").addEventListener("click", runPrediction);
+  document.getElementById("repredictBtn").addEventListener("click", runPrediction);
+
+  // 出走表の貼り付け取込
+  document.getElementById("importBtn").addEventListener("click", () => {
+    const raw = document.getElementById("pasteArea").value;
+    const note = document.getElementById("importNote");
+    if (!raw.trim()) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 先に出走表のテキストを貼り付けてください";
+      return;
+    }
+    // URL（ページの住所）だけが貼られたケース: 取得はブラウザの制限（CORS）で不可のため、開いてコピーする手順へ誘導する
+    const trimmed = raw.trim();
+    if (/^https?:\/\/\S+$/.test(trimmed)) {
+      note.className = "import-note warn";
+      const safe = /^https:\/\/(www\.)?boatrace\.jp\//.test(trimmed);
+      note.innerHTML =
+        "⚠ 貼り付けられたのはページの<b>URL（住所）</b>です。取り込みに必要なのは<b>ページの中の文字</b>です。<br><br>" +
+        (safe ? `<a href="${trimmed}" target="_blank" rel="noopener"><b>→ この出走表ページを開く</b></a><br>` : "") +
+        "開いたページで、①選手の表のあたりを<b>長押し</b> → ②「<b>すべてを選択</b>」 → ③「<b>コピー</b>」 → ④ここに貼り付け直して「取り込む」を押してください。";
+      return;
+    }
+    const { boats, warnings } = parsePastedRacelist(raw);
+    if (boats.length === 0) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ " + warnings.join("\n⚠ ");
+      return;
+    }
+    // 生成＋RACER_COURSE_WIN照合＋保存は applyRacelistBoats に共通化（会場レース選択・アップロードと同一）
+    const { n, nFan } = applyRacelistBoats(boats);
+    showErrors([]);
+    const msgs = [`✅ ${n}艇分を取り込みました。`];
+    if (nFan > 0) {
+      msgs.push(`ℹ コース別1着率: ${nFan}艇は選手個人の公式実績（期別成績）を自動入力、${n - nFan}艇はデータ不足のためコース平均で補完しました。`);
+    } else {
+      msgs.push("ℹ コース別1着率は選手個人の実績と照合できなかったため、コース平均値で補完しています（手動で上書きも可能）。");
+    }
+    if (warnings.length > 0) msgs.push("⚠ " + warnings.join("\n⚠ "));
+    note.className = "import-note " + (warnings.length > 0 ? "warn" : "ok");
+    note.textContent = msgs.join("\n");
+  });
+
+  // オッズ貼り付け取込（単勝＋複勝・複勝はレンジ下限。他の入力は保持し odds/placeOdds のみ更新）
+  document.getElementById("oddsImportBtn").addEventListener("click", () => {
+    const raw = document.getElementById("oddsPasteArea").value;
+    const note = document.getElementById("oddsImportNote");
+    if (!raw.trim()) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 先にオッズページ（単勝・複勝）のテキストを貼り付けてください";
+      return;
+    }
+    if (/^https?:\/\/\S+$/.test(raw.trim())) {
+      note.className = "import-note warn";
+      note.innerHTML = "⚠ 貼り付けられたのはページの<b>URL</b>です。オッズページを開いて、ページ内の<b>文字</b>（単勝・複勝の表）を全選択→コピーして貼り付けてください。";
+      return;
+    }
+    // 見出しで単勝/複勝 と 2連単 を判別（別ページのどちらを貼っても取り込める）
+    const has単複 = /単勝\s*オッズ|複勝\s*オッズ/.test(raw);
+    const has2t = /2\s*連単\s*オッズ/.test(raw);
+    if (!has単複 && !has2t) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 「単勝・複勝」または「2連単」のオッズページの表を、すべて選択→コピーして貼り付けてください。";
+      return;
+    }
+    let nt = 0, nf = 0, ne = 0;
+    const allWarn = [];
+    if (has単複) {
+      const { tansho, fukusho, warnings } = parsePastedOdds(raw);
+      for (let i = 0; i < 6; i++) {
+        if (tansho[i] != null) { state.boats[i].odds = String(tansho[i]); nt++; }
+        if (fukusho[i] != null) { state.boats[i].placeOdds = String(fukusho[i]); nf++; }
+      }
+      allWarn.push(...warnings);
+    }
+    if (has2t) {
+      const { exacta, warnings } = parsePastedExacta(raw);
+      state.exactaOdds = { ...(state.exactaOdds || {}), ...exacta };
+      ne = Object.keys(exacta).length;
+      allWarn.push(...warnings);
+    }
+    fillFormFromState();
+    saveState();
+    if (nt === 0 && nf === 0 && ne === 0) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ オッズを読み取れませんでした。オッズページの表を「すべて選択→コピー」して貼り付けてください。"
+        + (allWarn.length ? "\n⚠ " + allWarn.join("\n⚠ ") : "");
+      return;
+    }
+    const parts = [];
+    if (has単複) parts.push(`単勝${nt}艇・複勝${nf}艇`);
+    if (has2t) parts.push(`2連単${ne}件`);
+    const msgs = [`✅ ${parts.join("・")} のオッズを取り込みました（複勝はレンジ下限）。予測すると期待値が出ます。`];
+    if (allWarn.length > 0) msgs.push("⚠ " + allWarn.join("\n⚠ "));
+    note.className = "import-note " + (allWarn.length > 0 ? "warn" : "ok");
+    note.textContent = msgs.join("\n");
+  });
+
+  // サンプルデータ
+  document.getElementById("sampleBtn").addEventListener("click", () => {
+    state.boats = SAMPLE.map(s => ({ ...s }));
+    fillFormFromState();
+    showErrors([]);
+    saveState();
+  });
+
+  // クリア（claude.ai Artifact 上では confirm() がブロックされるため、2回タップ方式で確認する）
+  let clearArmed = null;
+  document.getElementById("clearBtn").addEventListener("click", () => {
+    const btn = document.getElementById("clearBtn");
+    if (!clearArmed) {
+      btn.textContent = "🗑 もう一度で消去！";  // スマホでボタン幅が折り返さない長さにする
+      btn.style.fontWeight = "bold";
+      clearArmed = setTimeout(() => {   // 4秒以内に2回目がなければ取り消し
+        clearArmed = null;
+        btn.textContent = "🗑 入力を全部クリア";
+        btn.style.fontWeight = "";
+      }, 4000);
+      return;
+    }
+    clearTimeout(clearArmed);
+    clearArmed = null;
+    btn.textContent = "🗑 入力を全部クリア";
+    btn.style.fontWeight = "";
+    state.boats = Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" }));
+    state.exactaOdds = {};
+    fillFormFromState();
+    document.getElementById("resultSection").hidden = true;
+    // 貼り付け欄と取込メッセージも一緒にクリアする
+    document.getElementById("pasteArea").value = "";
+    const inote = document.getElementById("importNote");
+    inote.className = "import-note";
+    inote.textContent = "";
+    document.getElementById("oddsPasteArea").value = "";
+    const onote = document.getElementById("oddsImportNote");
+    onote.className = "import-note";
+    onote.textContent = "";
+    showErrors([]);
+    saveState();
+  });
+
+  // 重みリセット
+  document.getElementById("resetBtn").addEventListener("click", () => {
+    state.weights = Object.fromEntries(METRICS.map(m => [m.key, m.defWeight]));
+    state.alpha = DEFAULT_ALPHA;
+    refreshSettingsUI();
+    saveState();
+  });
+
+  // 会場・レース選択で自動入力（T-20260715-02）
+  document.getElementById("rlVenue").addEventListener("change", () => { refreshRaceOptions(); updateRacelistLinks(); });
+  document.getElementById("rlRace").addEventListener("change", updateRacelistLinks);
+  document.getElementById("rlDate").addEventListener("change", refreshRacelistUI);
+  document.getElementById("rlApplyBtn").addEventListener("click", applySelectedRace);
+  document.getElementById("rlFile").addEventListener("change", e => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();  // fetch不使用のローカル読込（§5.5）
+    reader.onload = () => handleRacelistJsonText(String(reader.result || ""), "ファイル");
+    reader.onerror = () => {
+      const note = document.getElementById("rlDataNote");
+      note.className = "import-note warn";
+      note.textContent = "⚠ ファイルを読み込めませんでした。JSONの中身をコピーして貼り付け欄から読み込んでください。";
+    };
+    reader.readAsText(file);
+  });
+  document.getElementById("rlPasteBtn").addEventListener("click", () => {
+    handleRacelistJsonText(document.getElementById("rlPasteArea").value, "貼り付け");
+  });
+  document.getElementById("rlClearDataBtn").addEventListener("click", () => {
+    try { localStorage.removeItem(RACELIST_KEY); } catch (e) {}
+    document.getElementById("rlPasteArea").value = "";
+    initRacelistUI();
+    const note = document.getElementById("rlDataNote");
+    note.className = "import-note";
+    note.textContent = "🗑 読み込んだ出走表データを消しました（アプリ埋め込みデータがあればそれを使います）。";
+  });
+}
+
+// ---- 起動 ----
+loadState();
+buildBoatCards();
+buildSettings();
+// 「入力する数字のかんたん解説」を設定画面（重み・イン補正）にも複製表示（内容は単一ソース）
+{
+  const helpClone = document.getElementById("metricsHelp").cloneNode(true);
+  helpClone.removeAttribute("id");
+  document.getElementById("metricsHelpSlot").appendChild(helpClone);
+}
+fillFormFromState();
+bindEvents();
+initRacelistUI();  // 会場・レース選択UIの初期化（プルダウン生成・日付既定・ディープリンク）
+</script>
+</body>
+</html>

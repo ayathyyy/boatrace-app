@@ -1,0 +1,4 @@
+# オッズはコミットしない（Pages アーティファクトデプロイのみ・設計09）
+data/odds_today.json
+__pycache__/
+*.pyc
