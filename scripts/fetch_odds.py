@@ -24,6 +24,9 @@ from boatrace_common import now_jst
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "odds_today.json"
 LIVE_URL = "https://ayathyyy.github.io/boatrace-app/data/odds_today.json"
+# Actions の timeout(27分) 内に必ず終えるためのスクリプト内デッドライン。
+# 時間切れ分は打ち切り→liveマージにより前回値が残り、次スイープ（開始会場ローテーション）で補完される。
+DEADLINE_SEC = 21 * 60
 
 # 実ページは class="oddsPoint " と末尾に空白が入る（phase2/odds_fetch.py と同一）
 RE_ODDS = re.compile(r'oddsPoint[^"]*">([^<]+)<')
@@ -108,11 +111,21 @@ def main():
     hd = args.date or now_jst().strftime("%Y%m%d")
 
     session = requests.Session()
+    t0 = time.monotonic()
     races = load_live_base(hd)
     jcds = today_jcds(session, hd)
+    # 開始会場をスロットごとにローテーション（デッドライン打ち切り時の取り残しを均す）
+    if jcds:
+        rot = (now_jst().hour * 2 + now_jst().minute // 30) % len(jcds)
+        jcds = jcds[rot:] + jcds[:rot]
+        print(f"開催 {len(jcds)}場（開始会場ローテ: {jcds[0]} から）", flush=True)
     n_ok = n_ex = 0
+    stopped = False
     for jcd in jcds:
         for rno in range(1, 13):
+            if time.monotonic() - t0 > DEADLINE_SEC:
+                stopped = True
+                break
             try:
                 got = fetch_race_odds(session, jcd, rno, hd)
                 if not got:
@@ -128,14 +141,18 @@ def main():
                 races[f"{jcd}-{rno}"] = entry
                 n_ok += 1
             except Exception as e:
-                print(f"{jcd}-{rno} ERROR {e}")
+                print(f"{jcd}-{rno} ERROR {e}", flush=True)
+        if stopped:
+            break
+        print(f"{jcd} 完了（経過 {int(time.monotonic() - t0)}秒）", flush=True)
 
     data = {"date": hd,
             "fetched_at": now_jst().isoformat(timespec="seconds"),
             "races": races}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
-    print(f"{hd}: 場={len(jcds)} 更新={n_ok}レース(2連単 {n_ex}) 合計={len(races)}レース → {OUT}")
+    cut = "（⏱時間上限で途中打切り→残りは次スイープで補完）" if stopped else ""
+    print(f"{hd}: 場={len(jcds)} 更新={n_ok}レース(2連単 {n_ex}) 合計={len(races)}レース{cut} → {OUT}")
     return 0
 
 
