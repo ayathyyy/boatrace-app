@@ -54,10 +54,16 @@ def main():
         print(f"{ymd}: 番組表Bが未提供(404)。生成を中止します（exit 1）")
         return 1
 
-    _races, entries = parse_b(text, ymd)
+    races, entries = parse_b(text, ymd)
     if not entries:
         print(f"{ymd}: entries が0件。生成を中止します（exit 1）")
         return 1
+
+    # 締切予定時刻マップ {"jcd-rno": "HH:MM"}（fetch_odds の締切優先収集用・T-20260718-09）
+    closes = {}
+    for r in races:
+        if r[6]:
+            closes[f"{r[2]}-{r[3]}"] = r[6]
 
     fan = load_fan_st()
     day, venues = {}, {}
@@ -80,6 +86,7 @@ def main():
         "generated_at": now_jst().isoformat(timespec="seconds"),
         ymd: day,
         "venues": dict(sorted(venues.items())),
+        "closes": closes,   # 締切予定時刻（アプリは未使用・fetch_odds の優先順位付けに使用）
     }
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")

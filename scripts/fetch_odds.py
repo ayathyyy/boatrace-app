@@ -181,6 +181,51 @@ def fetch_race_wide(session, jcd, rno, hd):
     return _norm_pairs(_reconstruct(RE_CELL.findall(r.text[i:]), [SEQ_PAIRS], as_range=True))
 
 
+def load_closes(hd):
+    """リポ内 data/racelist_today.json の締切予定時刻 {"jcd-rno": "HH:MM"}（当日分のみ・T-20260718-09）"""
+    try:
+        j = json.loads((ROOT / "data" / "racelist_today.json").read_text(encoding="utf-8"))
+        if hd in j and isinstance(j.get("closes"), dict):
+            return j["closes"]
+    except Exception as e:
+        print(f"closes読込スキップ: {e}")
+    return {}
+
+
+def build_targets(jcds, hd):
+    """締切が近い順のレースリストを作る（締切優先収集・T-20260718-09）。
+    ・締切を40分超過したレースは除外（最終オッズは過去スイープで取得済み・liveマージで保持）
+    ・締切情報が無いレース（closes未配布の朝など）は従来のローテーションで末尾に"""
+    closes = load_closes(hd)
+    now = now_jst()
+    now_min = now.hour * 60 + now.minute
+    pri, rest = [], []
+    for jcd in jcds:
+        for rno in range(1, 13):
+            c = closes.get(f"{jcd}-{rno}")
+            if c:
+                try:
+                    hh, mm = c.split(":")
+                    delta = int(hh) * 60 + int(mm) - now_min
+                except ValueError:
+                    rest.append((jcd, rno))
+                    continue
+                if delta < -40:
+                    continue
+                pri.append((delta, jcd, rno))
+            else:
+                rest.append((jcd, rno))
+    pri.sort()
+    if rest:
+        rot = ((now.hour * 4 + now.minute // 15) * 12) % len(rest)
+        rest = rest[rot:] + rest[:rot]
+    if closes:
+        print(f"締切優先: {len(pri)}レース（締切40分超過はスキップ）＋締切情報なし {len(rest)}レース", flush=True)
+    else:
+        print(f"closes情報なし→従来ローテーション（{len(rest)}レース）", flush=True)
+    return [(j, r) for _, j, r in pri] + rest
+
+
 def load_live_base(hd):
     """公開サイトの現行JSONを取得。当日分なら races をマージのベースにする。"""
     try:
@@ -205,11 +250,8 @@ def main():
     t0 = time.monotonic()
     races = load_live_base(hd)
     jcds = today_jcds(requests.Session(), hd)
-    # 開始会場をスロットごとにローテーション（デッドライン打ち切り時の取り残しを均す）
-    if jcds:
-        rot = (now_jst().hour * 4 + now_jst().minute // 15) % len(jcds)
-        jcds = jcds[rot:] + jcds[:rot]
-        print(f"開催 {len(jcds)}場（開始会場ローテ: {jcds[0]} から・{WORKERS}並列）", flush=True)
+    print(f"開催 {len(jcds)}場・{WORKERS}並列", flush=True)
+    targets = build_targets(jcds, hd)
 
     def fetch_one(jcd, rno):
         """1レース分（単複/2連単/2連複/3連単/3連複/ワイド＝5ページ）を取得。戻り値 (key, entry) or None"""
@@ -232,14 +274,15 @@ def main():
             return None
 
     COMBO_KEYS = ("exacta", "quinella", "trifecta", "trio", "wide")
-    n_ok = n_full = 0
+    n_ok = n_full = done = 0
     stopped = False
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
-        for jcd in jcds:
+        for i in range(0, len(targets), 12):  # 締切が近い順に12レースずつ処理（T-20260718-09）
             if time.monotonic() - t0 > DEADLINE_SEC:
                 stopped = True
                 break
-            for res in pool.map(lambda rno, j=jcd: fetch_one(j, rno), range(1, 13)):
+            chunk = targets[i:i + 12]
+            for res in pool.map(lambda t: fetch_one(t[0], t[1]), chunk):
                 if not res:
                     continue
                 key, entry = res
@@ -251,7 +294,8 @@ def main():
                     n_full += 1
                 races[key] = entry
                 n_ok += 1
-            print(f"{jcd} 完了（経過 {int(time.monotonic() - t0)}秒）", flush=True)
+            done += len(chunk)
+            print(f"進捗 {done}/{len(targets)}（経過 {int(time.monotonic() - t0)}秒）", flush=True)
 
     data = {"schema": 2, "date": hd,
             "fetched_at": now_jst().isoformat(timespec="seconds"),

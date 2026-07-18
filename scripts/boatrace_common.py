@@ -106,6 +106,9 @@ def parse_b(text: str, ymd: str):
             title = m.group(2)
             dm = re.search(r"[HＨ](\d{3,4})[mｍ]", line)
             dist = int(dm.group(1)) if dm else None
+            # 電話投票締切予定時刻（例「電話投票締切予定１５：３０」→ "15:30"）。締切優先収集用（T-20260718-09）
+            cm = re.search(r"締切予定(\d{1,2})[:：](\d{2})", line)
+            close = f"{int(cm.group(1)):02d}:{cm.group(2)}" if cm else None
             races.append((f"{ymd}-{jcd}-{rno}", f"{ymd[:4]}-{ymd[4:6]}-{ymd[6:]}",
-                          jcd, rno, title, dist))
+                          jcd, rno, title, dist, close))
     return races, entries

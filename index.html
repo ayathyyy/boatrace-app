@@ -393,10 +393,12 @@
       .allbets-note { font-weight: normal; color: var(--sub); font-size: .8rem; }
       .allbets-buy { padding: 4px 10px; }
       .allbets-table td, .allbets-table th { white-space: nowrap; }
+      .allbets-more { margin: 4px 0 8px; }
+      .allbets-more > summary { cursor: pointer; color: var(--sub); font-size: .85rem; padding: 4px 0; }
     </style>
     <details class="inhelp" id="allBetsBox">
       <summary>🧮 全券種・全組み合わせの一覧を見る（買うかは別・参考）</summary>
-      <p class="basis-note">単勝・複勝の確率は過去1年実績で較正済み。2連単/2連複/ワイド/3連単/3連複は Harville 近似（較正なし＝参考値）。オッズは自動取得の時点値（— は未取得）。期待値＝確率×オッズで <b>1.2以上が🟢買い</b>（判定はオッズ下限で保守的に）。複勝・ワイドはオッズ幅から期待値も幅で表示。🛒 で下の購入履歴に記録できます。</p>
+      <p class="basis-note">各券種とも<b>確率の高い順に上位10</b>を表示（残りは「▼」で展開）。単勝・複勝の確率は過去1年実績で較正済み。2連単/2連複/ワイド/3連単/3連複は Harville 近似（較正なし＝参考値）。オッズは自動取得の時点値（— は未取得）。期待値＝確率×オッズで <b>1.2以上が🟢買い</b>（判定はオッズ下限で保守的に）。複勝・ワイドはオッズ幅から期待値も幅で表示。🛒 で下の購入履歴に記録できます。</p>
       <div class="toolbar" style="margin:6px 0">
         <label>🛒 記録するときの1点あたり掛け金 <input type="number" id="allBetsStake" value="100" min="100" step="100" style="width:90px"> 円</label>
       </div>
@@ -653,22 +655,27 @@ function renderAllBets(result) {
       r.ev = r.lo != null ? r.p * r.lo : null;                     // 判定は下限（保守的）
       r.evHi = r.lo != null && r.hi != null ? r.p * r.hi : null;
     });
-    rows.sort((a, b) => (b.ev ?? -1) - (a.ev ?? -1) || b.p - a.p);
+    rows.sort((a, b) => b.p - a.p || (b.ev ?? -1) - (a.ev ?? -1)); // 確率の高い順（T-20260718-09 社長指定）
     const nOdds = rows.filter(r => r.lo != null).length;
-    html += `<h3 class="allbets-h">${sec.bt} <span class="allbets-note">（${rows.length}通り・${sec.note}${nOdds ? "" : "・オッズ未取得"}）</span></h3>`;
-    html += `<div class="table-scroll"><table class="bets-table allbets-table">`
-      + `<tr><th>買い目</th><th>推定確率</th><th>オッズ</th><th>期待値</th><th>判定</th><th></th></tr>`;
-    for (const r of rows) {
+    const headRow = `<tr><th>買い目</th><th>推定確率</th><th>オッズ</th><th>期待値</th><th>判定</th><th></th></tr>`;
+    const rowHtml = r => {
       const badge = r.ev != null ? evBadge(r.ev) : "";
       const buyBtn = r.lo != null
         ? `<button type="button" class="btn-sub allbets-buy" data-buy="1" data-bt="${sec.bt}" data-target="${r.target}" data-odds="${r.lo}" data-ev="${r.ev.toFixed(3)}">🛒</button>`
         : "";
-      html += `<tr><td><b>${r.target}</b></td><td>${fmtP(r.p)}</td>`
+      return `<tr><td><b>${r.target}</b></td><td>${fmtP(r.p)}</td>`
         + `<td>${fmtOdds(r.lo, r.hi)}</td>`
         + `<td>${r.ev != null ? fmtEv(r.ev, r.evHi) : "—"}</td>`
         + `<td>${badge}</td><td>${buyBtn}</td></tr>`;
+    };
+    const top = rows.slice(0, 10);
+    const rest = rows.slice(10);
+    html += `<h3 class="allbets-h">${sec.bt} <span class="allbets-note">（${rows.length}通り・確率順・${sec.note}${nOdds ? "" : "・オッズ未取得"}）</span></h3>`;
+    html += `<div class="table-scroll"><table class="bets-table allbets-table">` + headRow + top.map(rowHtml).join("") + `</table></div>`;
+    if (rest.length) {
+      html += `<details class="allbets-more"><summary>▼ 残り${rest.length}通りをすべて表示</summary>`
+        + `<div class="table-scroll"><table class="bets-table allbets-table">` + headRow + rest.map(rowHtml).join("") + `</table></div></details>`;
     }
-    html += `</table></div>`;
   }
   box.innerHTML = html;
 }
