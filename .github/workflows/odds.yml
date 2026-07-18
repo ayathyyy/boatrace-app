@@ -1,9 +1,10 @@
-# オッズ収集: 09:07〜21:37 JST の30分おきに全レースの単勝/複勝/2連単を取得し Pages へデプロイ
+# オッズ収集: 09時〜21時台 JST の15分おきに全レースの単勝/複勝/2連単を取得し Pages へデプロイ
 # odds_today.json はコミットしない（履歴肥大防止・設計09）。cron は UTC（0-12時 = 9-21時 JST）。
+# GitHub の cron はスロットが飛ぶことがあるため多め（15分刻み）に設定し、concurrency で直列化する。
 name: odds
 on:
   schedule:
-    - cron: "7,37 0-12 * * *"
+    - cron: "7,22,37,52 0-12 * * *"
   workflow_dispatch:
 permissions:
   contents: read

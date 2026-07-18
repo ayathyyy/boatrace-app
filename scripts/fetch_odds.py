@@ -10,16 +10,30 @@ import argparse
 import json
 import re
 import sys
+import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from boatrace_common import BOATRACE_BASE as BASE
-from boatrace_common import SLEEP_ODDS as SLEEP
 from boatrace_common import UA as HEADERS
 from boatrace_common import now_jst
+
+# Actions ランナーからの応答が遅く（実測 数秒/ページ）21分で全会場を回りきれないため、
+# 3並列×待機1.0秒に調整（合計リクエストレートは従来の単独2.0秒間隔と同水準・設計09 §6-8）。
+SLEEP = 1.0
+WORKERS = 3
+_tls = threading.local()
+
+
+def _session():
+    """スレッドごとに requests.Session を1本持つ（keep-alive維持）"""
+    if not hasattr(_tls, "s"):
+        _tls.s = requests.Session()
+    return _tls.s
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "odds_today.json"
@@ -110,41 +124,49 @@ def main():
     args = ap.parse_args()
     hd = args.date or now_jst().strftime("%Y%m%d")
 
-    session = requests.Session()
     t0 = time.monotonic()
     races = load_live_base(hd)
-    jcds = today_jcds(session, hd)
+    jcds = today_jcds(requests.Session(), hd)
     # 開始会場をスロットごとにローテーション（デッドライン打ち切り時の取り残しを均す）
     if jcds:
-        rot = (now_jst().hour * 2 + now_jst().minute // 30) % len(jcds)
+        rot = (now_jst().hour * 4 + now_jst().minute // 15) % len(jcds)
         jcds = jcds[rot:] + jcds[:rot]
-        print(f"開催 {len(jcds)}場（開始会場ローテ: {jcds[0]} から）", flush=True)
+        print(f"開催 {len(jcds)}場（開始会場ローテ: {jcds[0]} から・{WORKERS}並列）", flush=True)
+
+    def fetch_one(jcd, rno):
+        """1レース分（単複＋2連単）を取得。戻り値 (key, entry) or None。ワーカースレッドで実行"""
+        try:
+            got = fetch_race_odds(_session(), jcd, rno, hd)
+            if not got:
+                return None  # 未発売等 → live ベース値があればそのまま残る
+            entry = {"at": now_jst().strftime("%H:%M"),
+                     "tansho": got[0], "fukusho": got[1]}
+            ex = fetch_race_exacta(_session(), jcd, rno, hd)
+            if ex:
+                entry["exacta"] = ex
+            return (f"{jcd}-{rno}", entry)
+        except Exception as e:
+            print(f"{jcd}-{rno} ERROR {e}", flush=True)
+            return None
+
     n_ok = n_ex = 0
     stopped = False
-    for jcd in jcds:
-        for rno in range(1, 13):
+    with ThreadPoolExecutor(max_workers=WORKERS) as pool:
+        for jcd in jcds:
             if time.monotonic() - t0 > DEADLINE_SEC:
                 stopped = True
                 break
-            try:
-                got = fetch_race_odds(session, jcd, rno, hd)
-                if not got:
-                    continue  # 未発売等 → live ベース値があればそのまま残る
-                entry = {"at": now_jst().strftime("%H:%M"),
-                         "tansho": got[0], "fukusho": got[1]}
-                ex = fetch_race_exacta(session, jcd, rno, hd)
-                if ex:
-                    entry["exacta"] = ex
+            for res in pool.map(lambda rno, j=jcd: fetch_one(j, rno), range(1, 13)):
+                if not res:
+                    continue
+                key, entry = res
+                if "exacta" in entry:
                     n_ex += 1
-                elif isinstance(races.get(f"{jcd}-{rno}"), dict) and "exacta" in races[f"{jcd}-{rno}"]:
-                    entry["exacta"] = races[f"{jcd}-{rno}"]["exacta"]  # 今回だけ取れなかった場合は前回値を維持
-                races[f"{jcd}-{rno}"] = entry
+                elif isinstance(races.get(key), dict) and "exacta" in races[key]:
+                    entry["exacta"] = races[key]["exacta"]  # 今回だけ取れなかった場合は前回値を維持
+                races[key] = entry
                 n_ok += 1
-            except Exception as e:
-                print(f"{jcd}-{rno} ERROR {e}", flush=True)
-        if stopped:
-            break
-        print(f"{jcd} 完了（経過 {int(time.monotonic() - t0)}秒）", flush=True)
+            print(f"{jcd} 完了（経過 {int(time.monotonic() - t0)}秒）", flush=True)
 
     data = {"date": hd,
             "fetched_at": now_jst().isoformat(timespec="seconds"),
