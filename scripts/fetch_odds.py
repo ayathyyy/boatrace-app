@@ -25,7 +25,7 @@ from boatrace_common import now_jst
 # Actions ランナーからの応答が遅く（実測 数秒/ページ）21分で全会場を回りきれないため、
 # 3並列×待機1.0秒に調整（合計リクエストレートは従来の単独2.0秒間隔と同水準・設計09 §6-8）。
 SLEEP = 1.0
-WORKERS = 3
+WORKERS = 4   # 5ページ/レースに増えたぶん並列を1増やす（設計09 §6-8）
 _tls = threading.local()
 
 
@@ -44,9 +44,63 @@ DEADLINE_SEC = 21 * 60
 
 # 実ページは class="oddsPoint " と末尾に空白が入る（phase2/odds_fetch.py と同一）
 RE_ODDS = re.compile(r'oddsPoint[^"]*">([^<]+)<')
-RE_EXACTA_PAIR = re.compile(
-    r'<td class="is-fs14 is-boatColor\d[^"]*">(\d+)</td>\s*'
-    r'<td class="oddsPoint\s*">([^<]+)</td>')
+# 「艇番セル（is-boatColor 系）＋直後の oddsPoint セル」のペア。class の前置き（is-fs14 等）や
+# 後置き（is-borderLeftNone 等）の表記ゆれを許容する（2026-07-18 実ページで 116/120 落ちが出たため緩和）。
+# 2着/相手グループのセルは直後が oddsPoint でないため誤マッチしない（隣接条件でフィルタ）。
+RE_CELL = re.compile(
+    r'<td class="[^"]*is-boatColor\d[^"]*">(\d+)</td>\s*'
+    r'<td class="oddsPoint[^"]*">([^<]+)</td>')
+
+
+def num_range(s):
+    """'3.4' → (3.4, 3.4) / '1.0-1.2' → (1.0, 1.2) / '1725'（万舟整数）対応。不正・0.0 は None"""
+    m = re.match(r"(\d+(?:\.\d+)?)(?:-(\d+(?:\.\d+)?))?", s.strip())
+    if not m:
+        return None
+    lo = float(m.group(1))
+    hi = float(m.group(2)) if m.group(2) else lo
+    return (lo, hi) if lo > 0 else None
+
+
+def _reconstruct(pairs, seqs, as_range=False):
+    """(表示数字, オッズ文字列) の列を、候補シーケンス（組タプルの並び・2026-07-18 実ページ解読済み）に割り当てる。
+    各セルの表示数字＝組の最後の要素、で全数自己検証し、完全一致した候補のみ採用（不一致は None）。"""
+    for seq in seqs:
+        if len(pairs) != len(seq):
+            continue
+        out = {}
+        ok = True
+        for (digit, odds), combo in zip(pairs, seq):
+            if int(digit) != combo[-1]:
+                ok = False  # 並び不一致＝レイアウト違い → この候補は不採用
+                break
+            v = num_range(odds)
+            if v is None:
+                continue  # "0.0-0.0"・"欠場" 等はその組だけスキップ（表全体は採用）
+            out["-".join(map(str, combo))] = list(v) if as_range else v[0]
+        if ok:
+            return out if out else None
+    return None
+
+
+def _others(*used):
+    return [b for b in range(1, 7) if b not in used]
+
+
+# --- 実ページで解読済みのセル並び（2026-07-18 debug_layout で全digit一致を確認）---
+# 2連複・ワイド: 対角レイアウト（大きい番号=行）: (1,2),(1,3),(2,3),(1,4),(2,4),(3,4),…
+SEQ_PAIRS = [(s, L) for L in range(2, 7) for s in range(1, L)]
+# 3連複: 2着グループ j → 3着 k → 1着 f の順
+SEQ_TRIO = [(f, j, k) for j in range(2, 6) for k in range(j + 1, 7) for f in range(1, j)]
+# 3連単: 6列（1着）等高・行優先（2着昇順×3着昇順）
+SEQ_TRIFECTA = []
+for _r in range(20):
+    for _f in range(1, 7):
+        _s = _others(_f)[_r // 4]
+        _t = _others(_f, _s)[_r % 4]
+        SEQ_TRIFECTA.append((_f, _s, _t))
+# 2連単: 6列（1着）等高・行優先（2着昇順）
+SEQ_EXACTA = [(f, _others(f)[r]) for r in range(5) for f in range(1, 7)]
 
 
 def today_jcds(session, hd):
@@ -57,50 +111,74 @@ def today_jcds(session, hd):
 
 
 def fetch_race_odds(session, jcd, rno, hd):
-    """oddstf ページから 単勝6艇＋複勝6艇 のオッズを取得。開催なしは None"""
+    """oddstf: 単勝6（数値）＋複勝6（[lo,hi] レンジ両端・v2）。開催なしは None"""
     r = session.get(f"{BASE}/oddstf?rno={rno}&jcd={jcd}&hd={hd}",
                     headers=HEADERS, timeout=30)
     time.sleep(SLEEP)
     vals = RE_ODDS.findall(r.text)
     if len(vals) < 12:
         return None  # 未発売・開催なし等
-    def num(s):  # "3.4" / "1.0-1.2"（下限）/ "1725"（万舟級=小数点省略）/ "欠場"・"0.0" 等
-        m = re.match(r"(\d+(?:\.\d+)?)", s.strip())
-        if not m:
-            return None
-        v = float(m.group(1))
-        return v if v > 0 else None  # 0.0 は欠場・未発売として除外
-    tansho = [num(v) for v in vals[0:6]]
-    fukusho = [num(v) for v in vals[6:12]]
+    tansho = [(v[0] if (v := num_range(x)) else None) for x in vals[0:6]]
+    fukusho = [(list(v) if (v := num_range(x)) else None) for x in vals[6:12]]
     return tansho, fukusho
 
 
-def fetch_race_exacta(session, jcd, rno, hd):
-    """odds2tf ページから 2連単30通り のオッズを取得。{"i-j": odds} を返す。
-    30通り揃わない/並びが想定外（欠場・未発売）は None。2連複は対象外。"""
+# 順不同券種（2連複・ワイド）のキーを昇順 "i-j" に正規化
+def _norm_pairs(d):
+    return {"-".join(map(str, sorted(map(int, k.split("-"))))): v for k, v in d.items()} if d else d
+
+
+def fetch_race_2t2f(session, jcd, rno, hd):
+    """odds2tf 1ページから 2連単30通り と 2連複15通り を取得（(exacta, quinella)・各 None あり）"""
     r = session.get(f"{BASE}/odds2tf?rno={rno}&jcd={jcd}&hd={hd}",
                     headers=HEADERS, timeout=30)
     time.sleep(SLEEP)
     text = r.text
+    exacta = quinella = None
     try:
         sec = text[text.index("2連単オッズ"):text.index("2連複オッズ")]
+        exacta = _reconstruct(RE_CELL.findall(sec), [SEQ_EXACTA])
     except ValueError:
+        pass
+    try:
+        sec2 = text[text.index("2連複オッズ"):]
+        quinella = _norm_pairs(_reconstruct(RE_CELL.findall(sec2), [SEQ_PAIRS]))
+    except ValueError:
+        pass
+    return exacta, quinella
+
+
+def fetch_race_3t(session, jcd, rno, hd):
+    """odds3t: 3連単120通り {"i-j-k": odds}。揃わなければ None"""
+    r = session.get(f"{BASE}/odds3t?rno={rno}&jcd={jcd}&hd={hd}",
+                    headers=HEADERS, timeout=30)
+    time.sleep(SLEEP)
+    i = r.text.find("3連単オッズ")
+    if i < 0:
         return None
-    pairs = RE_EXACTA_PAIR.findall(sec)
-    if len(pairs) != 30:
+    return _reconstruct(RE_CELL.findall(r.text[i:]), [SEQ_TRIFECTA])
+
+
+def fetch_race_3f(session, jcd, rno, hd):
+    """odds3f: 3連複20通り {"i-j-k": odds}（i<j<k）。揃わなければ None"""
+    r = session.get(f"{BASE}/odds3f?rno={rno}&jcd={jcd}&hd={hd}",
+                    headers=HEADERS, timeout=30)
+    time.sleep(SLEEP)
+    i = r.text.find("3連複オッズ")
+    if i < 0:
         return None
-    exacta = {}
-    for k, (second, odds) in enumerate(pairs):
-        first = (k % 6) + 1
-        second = int(second)
-        expected = [b for b in range(1, 7) if b != first][k // 6]
-        if second != expected:  # 自己検証: 列内2着は昇順(自分除外)
-            return None
-        m = re.match(r"(\d+(?:\.\d+)?)", odds.strip())
-        if not m:
-            return None
-        exacta[f"{first}-{second}"] = float(m.group(1))
-    return exacta if len(exacta) == 30 else None
+    return _reconstruct(RE_CELL.findall(r.text[i:]), [SEQ_TRIO])
+
+
+def fetch_race_wide(session, jcd, rno, hd):
+    """oddsk: ワイド15通り {"i-j": [lo,hi]}（レンジ・i<j）。揃わなければ None"""
+    r = session.get(f"{BASE}/oddsk?rno={rno}&jcd={jcd}&hd={hd}",
+                    headers=HEADERS, timeout=30)
+    time.sleep(SLEEP)
+    i = r.text.find("拡連複オッズ")
+    if i < 0:
+        return None
+    return _norm_pairs(_reconstruct(RE_CELL.findall(r.text[i:]), [SEQ_PAIRS], as_range=True))
 
 
 def load_live_base(hd):
@@ -134,22 +212,27 @@ def main():
         print(f"開催 {len(jcds)}場（開始会場ローテ: {jcds[0]} から・{WORKERS}並列）", flush=True)
 
     def fetch_one(jcd, rno):
-        """1レース分（単複＋2連単）を取得。戻り値 (key, entry) or None。ワーカースレッドで実行"""
+        """1レース分（単複/2連単/2連複/3連単/3連複/ワイド＝5ページ）を取得。戻り値 (key, entry) or None"""
         try:
             got = fetch_race_odds(_session(), jcd, rno, hd)
             if not got:
                 return None  # 未発売等 → live ベース値があればそのまま残る
             entry = {"at": now_jst().strftime("%H:%M"),
                      "tansho": got[0], "fukusho": got[1]}
-            ex = fetch_race_exacta(_session(), jcd, rno, hd)
-            if ex:
-                entry["exacta"] = ex
+            ex, qn = fetch_race_2t2f(_session(), jcd, rno, hd)
+            for k2, v in (("exacta", ex), ("quinella", qn),
+                          ("trifecta", fetch_race_3t(_session(), jcd, rno, hd)),
+                          ("trio", fetch_race_3f(_session(), jcd, rno, hd)),
+                          ("wide", fetch_race_wide(_session(), jcd, rno, hd))):
+                if v:
+                    entry[k2] = v
             return (f"{jcd}-{rno}", entry)
         except Exception as e:
             print(f"{jcd}-{rno} ERROR {e}", flush=True)
             return None
 
-    n_ok = n_ex = 0
+    COMBO_KEYS = ("exacta", "quinella", "trifecta", "trio", "wide")
+    n_ok = n_full = 0
     stopped = False
     with ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for jcd in jcds:
@@ -160,21 +243,23 @@ def main():
                 if not res:
                     continue
                 key, entry = res
-                if "exacta" in entry:
-                    n_ex += 1
-                elif isinstance(races.get(key), dict) and "exacta" in races[key]:
-                    entry["exacta"] = races[key]["exacta"]  # 今回だけ取れなかった場合は前回値を維持
+                prev = races.get(key) if isinstance(races.get(key), dict) else None
+                for k2 in COMBO_KEYS:  # 今回だけ取れなかった券種は前回値を維持
+                    if k2 not in entry and prev and k2 in prev:
+                        entry[k2] = prev[k2]
+                if all(k2 in entry for k2 in COMBO_KEYS):
+                    n_full += 1
                 races[key] = entry
                 n_ok += 1
             print(f"{jcd} 完了（経過 {int(time.monotonic() - t0)}秒）", flush=True)
 
-    data = {"date": hd,
+    data = {"schema": 2, "date": hd,
             "fetched_at": now_jst().isoformat(timespec="seconds"),
             "races": races}
     OUT.parent.mkdir(parents=True, exist_ok=True)
     OUT.write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
     cut = "（⏱時間上限で途中打切り→残りは次スイープで補完）" if stopped else ""
-    print(f"{hd}: 場={len(jcds)} 更新={n_ok}レース(2連単 {n_ex}) 合計={len(races)}レース{cut} → {OUT}")
+    print(f"{hd}: 場={len(jcds)} 更新={n_ok}レース(全券種そろい {n_full}) 合計={len(races)}レース{cut} → {OUT}")
     return 0
 
 
