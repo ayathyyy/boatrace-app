@@ -6,7 +6,8 @@
 [![odds](https://github.com/ayathyyy/boatrace-app/actions/workflows/odds.yml/badge.svg)](https://github.com/ayathyyy/boatrace-app/actions/workflows/odds.yml)
 
 - **アプリ**: https://ayathyyy.github.io/boatrace-app/
-- 会場・レースを選ぶだけで、当日の**選手情報＋オッズ（単勝・複勝・2連単）**が自動入力される。
+- **🧮 券種別分析ダッシュボード**: https://ayathyyy.github.io/boatrace-app/analysis.html （毎晩22:30台に自動更新・履歴蓄積）
+- 会場・レースを選ぶだけで、当日の**選手情報＋オッズ（全券種）**が自動入力される。
 
 ## 仕組み
 
