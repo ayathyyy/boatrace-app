@@ -281,11 +281,11 @@
       <summary>🎯 会場・レースを選ぶだけで自動入力（本日の出走表データが必要）</summary>
       <p class="hint" id="racelistStatus" style="margin:6px 0"></p>
       <div class="racelist-howto">
-        <b>📌 今日の出走表データの入れ方</b>
+        <b>📌 使い方（基本は全自動）</b>
         <ol>
-          <li><b>PC</b>：<code>phase2\refresh_racelist.bat</code> をダブルクリック（自動生成→コピー→アプリ起動）。毎朝8:30にPC自動生成もされます（PC起動時のみ）</li>
-          <li><b>スマホ</b>：「ファイル」→ iCloud Drive →<b> Obsidian → 02_Projects → BoatRacePredictor </b>の <code>racelist_today.json</code> を、下の「📂 …読み込む」で<b>ファイルを選択</b>、または中身を<b>貼り付け</b></li>
-          <li>下で<b>会場・レースを選んで</b>「⬇️ この会場・レースを取り込む」を押す</li>
+          <li>出走表とオッズは<b>毎日自動で配信</b>されます（出走表=毎朝8時台・オッズ=9時〜21時に30分おき更新）。<b>何も準備せず</b>、下で<b>会場・レースを選んで「⬇️ 取り込む」</b>を押すだけで、選手情報とオッズ（単勝・複勝・2連単）が入ります</li>
+          <li>オッズには<b>取得時刻</b>が表示されます。締切が近いときはもう一度「取り込む」で最新化してください</li>
+          <li>⚠ 自動データが取れないとき（オフライン・配信障害・発売前）だけ、従来どおり: <b>PC</b>=<code>phase2\refresh_racelist.bat</code>、<b>スマホ</b>=「ファイル」→iCloud→Obsidian→02_Projects→BoatRacePredictor の <code>racelist_today.json</code> を下の「📂 …読み込む」から。オッズは公式ページのコピー貼り付けでもOK</li>
         </ol>
       </div>
       <div class="racelist-controls">
@@ -473,6 +473,65 @@ const JCD_NAMES = { "01":"桐生","02":"戸田","03":"江戸川","04":"平和島
 const RACELIST_EMBEDDED = /*RACELIST_START*/null/*RACELIST_END*/;
 
 /* =========================================================
+   公開サイト（GitHub Pages）の自動データ取得
+   設計: 20_設計/09_公開サイト自動収集設計.md §5（T-20260718-03）
+   ・GitHub Actions が生成する当日の出走表・オッズ JSON を直接 fetch する。
+   ・Pages は CORS 全許可のため、Artifact・iCloud コピーから開いても同じ URL で動く。
+   ・取得失敗時は何もしない＝既存3経路（アップロード>埋め込み>手入力）へ完全フォールバック。
+========================================================= */
+const PUBLISH_BASE = "https://ayathyyy.github.io/boatrace-app/";
+let fetchedRacelist = null; // 自動取得した出走表（メモリ保持のみ・localStorage に入れない）
+let fetchedOdds = null;     // 自動取得した当日オッズ { date, fetched_at, races: { "jcd-rno": {at,tansho,fukusho,exacta} } }
+
+async function fetchJson(url, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 8000);
+  try {
+    // ?t= は Pages CDN のキャッシュ回避（設計09 §6-5）
+    const res = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now(),
+                            { cache: "no-store", signal: ctrl.signal });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch (e) {
+    return null; // オフライン・タイムアウト等は静かに諦める（フォールバック）
+  } finally {
+    clearTimeout(timer);
+  }
+}
+async function refreshPublishedRacelist() {
+  const o = await fetchJson(PUBLISH_BASE + "data/racelist_today.json");
+  if (o && racelistDates(o).length) fetchedRacelist = o;
+  return fetchedRacelist;
+}
+async function refreshPublishedOdds(timeoutMs) {
+  const o = await fetchJson(PUBLISH_BASE + "data/odds_today.json", timeoutMs);
+  if (o && o.races && typeof o.races === "object") fetchedOdds = o; // 失敗時は前回値を維持
+  return fetchedOdds;
+}
+// 自動取得オッズを state へ反映（applyRacelistBoats のクリア直後に呼ぶ）。反映できたら案内文を返す
+function applyFetchedOdds(ymd, jcd, rno) {
+  if (!fetchedOdds || fetchedOdds.date !== ymd) return null;
+  const r = fetchedOdds.races && fetchedOdds.races[`${jcd}-${rno}`];
+  if (!r) return null;
+  let nt = 0, nf = 0, ne = 0;
+  for (let i = 0; i < 6; i++) {
+    const t = Array.isArray(r.tansho) ? r.tansho[i] : null;
+    const f = Array.isArray(r.fukusho) ? r.fukusho[i] : null;
+    if (t != null && t >= 1) { state.boats[i].odds = String(t); nt++; }
+    if (f != null && f >= 1) { state.boats[i].placeOdds = String(f); nf++; }
+  }
+  if (r.exacta && typeof r.exacta === "object" && Object.keys(r.exacta).length) {
+    state.exactaOdds = { ...r.exacta };
+    ne = Object.keys(r.exacta).length;
+  }
+  if (nt === 0 && nf === 0 && ne === 0) return null;
+  state.oddsAt = r.at || null;
+  fillFormFromState();
+  saveState();
+  return `💰 ${r.at || "?"}時点のオッズを自動入力しました（単勝${nt}・複勝${nf}・2連単${ne}件）。締切が近いときはもう一度「取り込む」で最新化できます。`;
+}
+
+/* =========================================================
    スコア→実勝率の較正表と期待値（EV）
    設計: 20_設計/08_フェーズ3_期待値戦略設計.md（EV = 較正済み勝率 × オッズ・閾値1.2）
    生成元: phase2/data/calibration.json（calibrate.py・2026-07-11 生成・
@@ -545,6 +604,7 @@ let state = {
   alpha: DEFAULT_ALPHA,
   budget: 1000,
   exactaOdds: {},   // 2連単オッズ { "i-j": odds }（貼り付けで自動入力）
+  oddsAt: null,     // オッズの取得時刻 "HH:MM"（自動取得）/ "手動入力"（貼り付け）/ null（未入力）
 };
 
 function saveState() {
@@ -565,6 +625,7 @@ function loadState() {
     if (s && typeof s.alpha === "number") state.alpha = s.alpha;
     if (s && typeof s.budget === "number") state.budget = s.budget;
     if (s && s.exactaOdds && typeof s.exactaOdds === "object") state.exactaOdds = s.exactaOdds;
+    if (s && typeof s.oddsAt === "string") state.oddsAt = s.oddsAt;
   } catch (e) {
     console.warn("保存データの読み込みに失敗しました", e);
   }
@@ -816,6 +877,7 @@ function applyRacelistBoats(boats) {
     state.boats[i] = { name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "" };
   }
   state.exactaOdds = {};
+  state.oddsAt = null;
   fillFormFromState();
   saveState();
   return { n, nFan };
@@ -1156,6 +1218,8 @@ function renderResult(result) {
   }
   if (!anyOdds) {
     totalNote += "\nℹ 単勝・複勝オッズを入力すると期待値（買う価値）判定が出ます";
+  } else if (state.oddsAt && state.oddsAt !== "手動入力") {
+    totalNote += `\nℹ オッズは ${state.oddsAt} 時点の自動取得値。締切直前は「取り込む」を押し直すか公式ページで最終確認を`;
   }
   document.getElementById("betsTotal").textContent = totalNote;
 
@@ -1179,7 +1243,10 @@ function loadUploadedRacelist() {
   } catch (e) { return null; }
 }
 function getActiveRacelist() {
-  return loadUploadedRacelist() || RACELIST_EMBEDDED || null;
+  // 自動取得（公開サイト）を最優先＝選択日のデータを持つ場合。古いアップロードが当日データを隠す事故を防ぐ（設計09 §5）
+  const ymd = isoToYmd((document.getElementById("rlDate") || {}).value || "");
+  if (fetchedRacelist && ymd && fetchedRacelist[ymd]) return fetchedRacelist;
+  return loadUploadedRacelist() || RACELIST_EMBEDDED || fetchedRacelist || null;
 }
 function racelistDates(data) {
   if (!data || typeof data !== "object") return [];
@@ -1239,7 +1306,8 @@ function refreshRacelistUI() {
   refreshRaceOptions();
   // ステータス表示
   const st = document.getElementById("racelistStatus");
-  const src = loadUploadedRacelist() ? "アップロード" : (RACELIST_EMBEDDED ? "アプリ埋め込み" : null);
+  const src = data && data === fetchedRacelist ? "🌐 自動取得"
+    : (loadUploadedRacelist() ? "アップロード" : (RACELIST_EMBEDDED ? "アプリ埋め込み" : null));
   if (day && Object.keys(day).length) {
     st.textContent = `✅ ${fmtYmd(ymd)} の出走表: ${venuesWithData.size}会場 ${Object.keys(day).length}レース分（${src}）。会場・レースを選んで取り込めます（●=データあり）。`;
   } else if (data && racelistDates(data).length) {
@@ -1284,32 +1352,44 @@ function handleRacelistJsonText(text, source) {
   note.textContent = `✅ 出走表データを読み込みました（${source}）。対象日 ${fmtYmd(latest)}・${nrace}レース。上で会場とレースを選んで「取り込む」を押してください。`;
   return true;
 }
-function applySelectedRace() {
+async function applySelectedRace() {
   const note = document.getElementById("rlNote");
-  const data = getActiveRacelist();
-  const ymd = isoToYmd(document.getElementById("rlDate").value);
-  const jcd = document.getElementById("rlVenue").value;
-  const rno = document.getElementById("rlRace").value;
-  if (!data || racelistDates(data).length === 0) {
-    note.className = "import-note warn";
-    note.textContent = "⚠ 先に本日の出走表データを読み込んでください（下の「📂 本日の出走表データを読み込む」）。";
-    return;
+  const btn = document.getElementById("rlApplyBtn");
+  btn.disabled = true;
+  try {
+    // 「選択時に最新」: 取り込むたびに公開サイトの最新オッズを再取得（失敗時は前回値のまま・設計09 §5）
+    note.className = "import-note";
+    note.textContent = "⏳ 最新のオッズを確認しています…";
+    await refreshPublishedOdds(5000);
+    const data = getActiveRacelist();
+    const ymd = isoToYmd(document.getElementById("rlDate").value);
+    const jcd = document.getElementById("rlVenue").value;
+    const rno = document.getElementById("rlRace").value;
+    if (!data || racelistDates(data).length === 0) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 先に本日の出走表データを読み込んでください（下の「📂 本日の出走表データを読み込む」）。";
+      return;
+    }
+    const day = data[ymd];
+    const boats = day && day[`${jcd}-${rno}`];
+    if (!boats || !boats.length) {
+      note.className = "import-note warn";
+      note.textContent = `⚠ ${JCD_NAMES[jcd] || jcd} ${rno}R（${fmtYmd(ymd)}）の出走表がデータにありません。●が付いた会場・レースを選ぶか、日付を確認してください。`;
+      return;
+    }
+    const { n, nFan } = applyRacelistBoats(boats);
+    const oddsMsg = applyFetchedOdds(ymd, jcd, rno);
+    showErrors([]);
+    const msgs = [`✅ ${JCD_NAMES[jcd] || jcd} ${rno}R の${n}艇を自動入力しました。`];
+    if (nFan > 0) msgs.push(`ℹ コース別1着率: ${nFan}艇は選手個人の公式実績、${n - nFan}艇はコース平均で補完。`);
+    else msgs.push("ℹ コース別1着率はコース平均で補完しています（個人実績と照合できた艇はその値）。");
+    if (oddsMsg) msgs.push(oddsMsg);
+    else msgs.push("💡 オッズはまだ自動取得できていません（発売前など）。上の「💰 …オッズを開く」で公式ページを開き、コピーして「📥 オッズを貼り付けて自動入力」に貼ることもできます。");
+    note.className = "import-note ok";
+    note.textContent = msgs.join("\n");
+  } finally {
+    btn.disabled = false;
   }
-  const day = data[ymd];
-  const boats = day && day[`${jcd}-${rno}`];
-  if (!boats || !boats.length) {
-    note.className = "import-note warn";
-    note.textContent = `⚠ ${JCD_NAMES[jcd] || jcd} ${rno}R（${fmtYmd(ymd)}）の出走表がデータにありません。●が付いた会場・レースを選ぶか、日付を確認してください。`;
-    return;
-  }
-  const { n, nFan } = applyRacelistBoats(boats);
-  showErrors([]);
-  const msgs = [`✅ ${JCD_NAMES[jcd] || jcd} ${rno}R の${n}艇を自動入力しました。`];
-  if (nFan > 0) msgs.push(`ℹ コース別1着率: ${nFan}艇は選手個人の公式実績、${n - nFan}艇はコース平均で補完。`);
-  else msgs.push("ℹ コース別1着率はコース平均で補完しています（個人実績と照合できた艇はその値）。");
-  msgs.push("💡 オッズは上の「💰 …オッズを開く」で公式ページを開き、コピーして「📥 オッズを貼り付けて自動入力」に貼ってください（変動するため都度）。");
-  note.className = "import-note ok";
-  note.textContent = msgs.join("\n");
 }
 function initRacelistUI() {
   const dateEl = document.getElementById("rlDate");
@@ -1321,6 +1401,20 @@ function initRacelistUI() {
     dateEl.value = todayISO();
   }
   refreshRacelistUI();
+  // 公開サイトから当日データを自動取得（成功したらUIを最新化・失敗時は現状維持＝完全フォールバック）
+  refreshPublishedRacelist().then(o => {
+    if (!o) return;
+    const ds = racelistDates(o);
+    if (ds.length) {
+      const cur = isoToYmd(dateEl.value);
+      if (!o[cur]) {
+        const latest = ds.sort().slice(-1)[0];
+        dateEl.value = `${latest.slice(0, 4)}-${latest.slice(4, 6)}-${latest.slice(6)}`;
+      }
+    }
+    refreshRacelistUI();
+  });
+  refreshPublishedOdds();
 }
 
 /* =========================================================
@@ -1451,6 +1545,7 @@ function bindEvents() {
       ne = Object.keys(exacta).length;
       allWarn.push(...warnings);
     }
+    if (nt > 0 || nf > 0 || ne > 0) state.oddsAt = "手動入力"; // 手貼りは自動取得より優先（オーバーライド）
     fillFormFromState();
     saveState();
     if (nt === 0 && nf === 0 && ne === 0) {
@@ -1496,6 +1591,7 @@ function bindEvents() {
     btn.style.fontWeight = "";
     state.boats = Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" }));
     state.exactaOdds = {};
+    state.oddsAt = null;
     fillFormFromState();
     document.getElementById("resultSection").hidden = true;
     // 貼り付け欄と取込メッセージも一緒にクリアする
