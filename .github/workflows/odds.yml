@@ -1,23 +1,36 @@
-# オッズ収集: 09時〜21時台 JST の15分おきに全レースの単勝/複勝/2連単を取得し Pages へデプロイ
-# odds_today.json はコミットしない（履歴肥大防止・設計09）。cron は UTC（0-12時 = 9-21時 JST）。
-# GitHub の cron はスロットが飛ぶことがあるため多め（15分刻み）に設定し、concurrency で直列化する。
+# オッズ収集: 日中 JST に全レースの単勝/複勝/2連単ほかを取得し Pages へデプロイ。
+# odds_today.json はコミットしない（履歴肥大防止・設計09）。
+#
+# ★自己連鎖方式（設計09 §8・T-20260719-11）: GitHub の schedule(cron) は public repo で
+#   大量に間引かれる（実測 52スロット/日 に対し発火5回＝約90%ドロップ）。そこで各 run が末尾で
+#   workflow_dispatch により次 run を自己起動し、日中は cron に依存せず ~13-15分間隔を維持する。
+#   workflow_dispatch は GITHUB_TOKEN でも再帰起動が許可される唯一の例外（要 actions: write）。
+#   cron は「朝の起動」＋「連鎖切れの保険」に降格（30分刻み・毎時00分の高負荷を避け :05/:35）。
 name: odds
 on:
   schedule:
-    - cron: "7,22,37,52 0-12 * * *"
+    - cron: "5,35 0-12 * * *"   # UTC 0-12時 = JST 9-21時。連鎖の起動/再シード用（間引かれても数本は発火）
   workflow_dispatch:
+    inputs:
+      chain_origin_utc:
+        description: "連鎖の起点UTC日付(YYYYMMDD)。cron/手動起動は空でよい（当日を起点に新連鎖）"
+        required: false
+        default: ""
 permissions:
   contents: read
   pages: write
   id-token: write
+  actions: write            # 自己連鎖（workflow_dispatch 起動）に必要（設計09 §8.2）
 concurrency:
   group: site-deploy
   cancel-in-progress: false
 jobs:
   odds:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25       # 10分デッドライン＋デプロイ＋連鎖ペーシングsleep 込みで余裕（設計09 §8.4）
     steps:
+      - name: record job start epoch
+        run: echo "T0=$(date +%s)" >> "$GITHUB_ENV"
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
@@ -30,3 +43,41 @@ jobs:
         with:
           path: .
       - uses: actions/deploy-pages@v4
+      # --- 自己連鎖: JST窓内なら次スイープを起動（設計09 §8.2-8.3）---
+      - name: chain next sweep
+        if: ${{ !cancelled() }}   # 取得/デプロイの一時失敗でも連鎖を止めない
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -e
+          # 連鎖の起点UTC日付（cron/手動＝空 → 今日を起点に新しい連鎖を開始）
+          origin="${{ github.event.inputs.chain_origin_utc }}"
+          today_utc="$(date -u +%Y%m%d)"
+          [ -z "$origin" ] && origin="$today_utc"
+          # 安全弁2: UTC日付が起点から変わったら連鎖停止（暴走防止・設計09 §8.3-2）
+          if [ "$origin" != "$today_utc" ]; then
+            echo "連鎖停止: 起点UTC $origin != 現在UTC $today_utc（日付跨ぎ）"
+            exit 0
+          fi
+          # 安全弁1: JST 09:00-21:30 の窓内のみ連鎖（窓外は cron/翌朝へ・設計09 §8.3-1）
+          cur=$((10#$(TZ=Asia/Tokyo date +%H%M)))
+          if [ "$cur" -lt 900 ] || [ "$cur" -gt 2130 ]; then
+            echo "連鎖停止: 窓外 $cur JST（09:00-21:30 のみ）"
+            exit 0
+          fi
+          # ペーシング: 目標間隔まで待って過密スピンを防止（鮮度~13-15分・設計09 §8.2）
+          MIN_INTERVAL=$((13*60))
+          now_epoch=$(date +%s)
+          start=${T0:-$now_epoch}
+          elapsed=$(( now_epoch - start ))
+          if [ "$elapsed" -lt "$MIN_INTERVAL" ]; then
+            sleep $(( MIN_INTERVAL - elapsed ))
+          fi
+          # sleep 後に窓を再確認（21:30 を跨いだら止める）
+          cur=$((10#$(TZ=Asia/Tokyo date +%H%M)))
+          if [ "$cur" -gt 2130 ]; then
+            echo "連鎖停止: sleep後に窓外 $cur JST"
+            exit 0
+          fi
+          echo "次スイープを起動（起点UTC=$origin, 現在=$cur JST）"
+          gh workflow run odds.yml -R "${{ github.repository }}" -f chain_origin_utc="$origin"

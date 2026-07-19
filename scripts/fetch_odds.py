@@ -25,7 +25,7 @@ from boatrace_common import now_jst
 # Actions ランナーからの応答が遅く（実測 数秒/ページ）21分で全会場を回りきれないため、
 # 3並列×待機1.0秒に調整（合計リクエストレートは従来の単独2.0秒間隔と同水準・設計09 §6-8）。
 SLEEP = 1.0
-WORKERS = 4   # 5ページ/レースに増えたぶん並列を1増やす（設計09 §6-8）
+WORKERS = 5   # 締切近接絞り(§8.4)で対象が減るぶん並列を1増やす。ピークレートはIP遮断リスク(§6-1)最優先で控えめ据え置き（設計09 §6-8/§8.4）
 _tls = threading.local()
 
 
@@ -38,9 +38,12 @@ def _session():
 ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "data" / "odds_today.json"
 LIVE_URL = "https://ayathyyy.github.io/boatrace-app/data/odds_today.json"
-# Actions の timeout(27分) 内に必ず終えるためのスクリプト内デッドライン。
-# 時間切れ分は打ち切り→liveマージにより前回値が残り、次スイープ（開始会場ローテーション）で補完される。
-DEADLINE_SEC = 21 * 60
+# 自己連鎖(設計09 §8)の間隔~13分に合わせたスクリプト内デッドライン。workflow timeout(25分)内で必ず終える。
+# 時間切れ分は打ち切り→liveマージで前回値が残り、次連鎖（締切優先/開始会場ローテーション）で補完される。
+DEADLINE_SEC = 10 * 60
+# 締切がこの分数より先の「遠い未来レース」は対象外にして対象数を絞る（スイープ短縮・近接レースの鮮度優先）。
+# 締切が近づけば後続の連鎖スイープで自然に対象化される（設計09 §8.4）。
+FUTURE_HORIZON_MIN = 120
 
 # 実ページは class="oddsPoint " と末尾に空白が入る（phase2/odds_fetch.py と同一）
 RE_ODDS = re.compile(r'oddsPoint[^"]*">([^<]+)<')
@@ -195,6 +198,7 @@ def load_closes(hd):
 def build_targets(jcds, hd):
     """締切が近い順のレースリストを作る（締切優先収集・T-20260718-09）。
     ・締切を40分超過したレースは除外（最終オッズは過去スイープで取得済み・liveマージで保持）
+    ・締切まで FUTURE_HORIZON_MIN 分超の遠い未来レースも除外（後続連鎖で対象化・スイープ短縮＝§8.4）
     ・締切情報が無いレース（closes未配布の朝など）は従来のローテーションで末尾に"""
     closes = load_closes(hd)
     now = now_jst()
@@ -210,8 +214,8 @@ def build_targets(jcds, hd):
                 except ValueError:
                     rest.append((jcd, rno))
                     continue
-                if delta < -40:
-                    continue
+                if delta < -40 or delta > FUTURE_HORIZON_MIN:
+                    continue  # 締切-40分超=取得済み / 締切まで遠い=まだ不要。後続連鎖で対象化（§8.4）
                 pri.append((delta, jcd, rno))
             else:
                 rest.append((jcd, rno))
@@ -220,7 +224,7 @@ def build_targets(jcds, hd):
         rot = ((now.hour * 4 + now.minute // 15) * 12) % len(rest)
         rest = rest[rot:] + rest[:rot]
     if closes:
-        print(f"締切優先: {len(pri)}レース（締切40分超過はスキップ）＋締切情報なし {len(rest)}レース", flush=True)
+        print(f"締切優先: {len(pri)}レース（締切-40分〜+{FUTURE_HORIZON_MIN}分の近接のみ）＋締切情報なし {len(rest)}レース", flush=True)
     else:
         print(f"closes情報なし→従来ローテーション（{len(rest)}レース）", flush=True)
     return [(j, r) for _, j, r in pri] + rest
