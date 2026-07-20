@@ -551,14 +551,26 @@ function applyFetchedOdds(ymd, jcd, rno) {
   const hiOf = v => Array.isArray(v) ? v[1] : null;
   let nt = 0, nf = 0, any = 0;
   const fHi = [null, null, null, null, null, null];
+  // tansho_status（v2.1・設計09 §9.5）: 単勝が空の艇に理由ラベルを割り当てる（無ければ「取得中」に緩フォールバック）
+  const STAT = { presale: "発売前", absent: "欠場", failed: "取得中" };
+  const st = Array.isArray(r.tansho_status) ? r.tansho_status : null;
+  const oddsStatus = [null, null, null, null, null, null];
+  let nPre = 0, nAbs = 0;
   for (let i = 0; i < 6; i++) {
     const t = Array.isArray(r.tansho) ? r.tansho[i] : null;
     const fv = Array.isArray(r.fukusho) ? r.fukusho[i] : null;
     const f = loOf(fv);
     if (t != null && t >= 1) { state.boats[i].odds = String(t); nt++; }
+    else {
+      const code = st ? st[i] : null;
+      oddsStatus[i] = STAT[code] || "取得中";   // 空欄の理由（旧データ=状態なしは取得中扱い）
+      if (code === "presale") nPre++; else if (code === "absent") nAbs++;
+    }
     if (f != null && f >= 1) { state.boats[i].placeOdds = String(f); fHi[i] = hiOf(fv); nf++; }
   }
+  state.oddsStatus = oddsStatus;
   const parts = [`単勝${nt}`, `複勝${nf}`];
+  const statNote = [nPre ? `発売前${nPre}艇` : "", nAbs ? `欠場${nAbs}艇` : ""].filter(Boolean).join("・");
   any = nt + nf;
   if (r.exacta && typeof r.exacta === "object" && Object.keys(r.exacta).length) {
     state.exactaOdds = { ...r.exacta };
@@ -578,7 +590,7 @@ function applyFetchedOdds(ymd, jcd, rno) {
   state.oddsAt = r.at || null;
   fillFormFromState();
   saveState();
-  return `💰 ${r.at || "?"}時点のオッズを自動入力しました（${parts.join("・")}件）。締切が近いときはもう一度「取り込む」で最新化できます。`;
+  return `💰 ${r.at || "?"}時点のオッズを自動入力しました（${parts.join("・")}件${statNote ? "／" + statNote : ""}）。${nPre ? "発売前の艇は発売後にもう一度「取り込む」で入ります。" : ""}締切が近いときはもう一度「取り込む」で最新化できます。`;
 }
 
 /* =========================================================
@@ -865,6 +877,7 @@ let state = {
   exactaOdds: {},   // 2連単オッズ { "i-j": odds }（貼り付けで自動入力）
   oddsAt: null,     // オッズの取得時刻 "HH:MM"（自動取得）/ "手動入力"（貼り付け）/ null（未入力）
   oddsExtra: null,  // 追加券種オッズ { fukushoHi:[6], quinella:{}, wide:{}, trifecta:{}, trio:{} }（v2自動取得・T-20260718-08）
+  oddsStatus: null, // 単勝が空の艇の理由 ["発売前"|"欠場"|"取得中"|null]×6（設計09 §9.5・T-20260720-06）
 };
 
 function saveState() {
@@ -887,6 +900,7 @@ function loadState() {
     if (s && s.exactaOdds && typeof s.exactaOdds === "object") state.exactaOdds = s.exactaOdds;
     if (s && typeof s.oddsAt === "string") state.oddsAt = s.oddsAt;
     if (s && s.oddsExtra && typeof s.oddsExtra === "object") state.oddsExtra = s.oddsExtra;
+    if (s && Array.isArray(s.oddsStatus)) state.oddsStatus = s.oddsStatus;
   } catch (e) {
     console.warn("保存データの読み込みに失敗しました", e);
   }
@@ -934,6 +948,11 @@ function fillFormFromState() {
     const f = inp.dataset.field;
     inp.value = state.boats[b][f] ?? "";
     inp.classList.remove("invalid");
+    // 単勝オッズが空の艇は理由（発売前/欠場/取得中）を placeholder に出す（設計09 §9.5）
+    if (f === "odds") {
+      const s = Array.isArray(state.oddsStatus) ? state.oddsStatus[b] : null;
+      inp.placeholder = (s && (inp.value === "" || inp.value == null)) ? s : "例 3.2";
+    }
   });
   document.getElementById("budget").value = state.budget;
 }
@@ -1140,6 +1159,7 @@ function applyRacelistBoats(boats) {
   state.exactaOdds = {};
   state.oddsAt = null;
   state.oddsExtra = null;
+  state.oddsStatus = null;   // レース切替で状態ラベルもクリア（設計09 §9.5）
   fillFormFromState();
   saveState();
   return { n, nFan };
@@ -1487,6 +1507,12 @@ function renderResult(result) {
   } else if (state.oddsAt && state.oddsAt !== "手動入力") {
     totalNote += `\nℹ オッズは ${state.oddsAt} 時点の自動取得値。締切直前は「取り込む」を押し直すか公式ページで最終確認を`;
   }
+  if (Array.isArray(state.oddsStatus)) {   // 発売前の歯抜けを結果画面でも説明（設計09 §9.5）
+    const pre = state.oddsStatus.filter(s => s === "発売前").length;
+    const abs = state.oddsStatus.filter(s => s === "欠場").length;
+    if (pre) totalNote += `\nℹ ${pre}艇はまだ発売前で単勝オッズ未確定です（発売後に「取り込む」を押すと入ります）`;
+    if (abs) totalNote += `\nℹ ${abs}艇は欠場です`;
+  }
   document.getElementById("betsTotal").textContent = totalNote;
 
   renderAllBets(result);   // 🧮 全買い目の確率・期待値一覧（T-20260718-08）
@@ -1803,6 +1829,7 @@ function bindEvents() {
     const allWarn = [];
     if (has単複) {
       const { tansho, fukusho, fukushoHi, warnings } = parsePastedOdds(raw);
+      state.oddsStatus = null;   // 手貼りは自動取得の状態ラベルを上書き（設計09 §9.5）
       if (!state.oddsExtra) state.oddsExtra = { fukushoHi: [null, null, null, null, null, null], quinella: {}, wide: {}, trifecta: {}, trio: {} };
       for (let i = 0; i < 6; i++) {
         if (tansho[i] != null) { state.boats[i].odds = String(tansho[i]); nt++; }
