@@ -10,6 +10,7 @@ permissions:
   contents: write
   pages: write
   id-token: write
+  actions: write            # 点火A（設計09 §8.6）: デプロイ後に odds を workflow_dispatch 起動するため
 concurrency:
   group: site-deploy
   cancel-in-progress: false
@@ -40,3 +41,13 @@ jobs:
         with:
           path: .
       - uses: actions/deploy-pages@v4
+      # --- 点火A: デプロイ成功後に odds を点火（毎朝の点火装置・設計09 §8.6）---
+      # racelist の cron（08:18/09:32 JST）は遅延しつつも毎朝ほぼ確実に発火する実績があるため、
+      # これを odds の起動源に転用する。点火は無条件・実際の収集/連鎖の判断は odds 側の
+      # 窓ガード（09:00-21:30 JST・設計09 §8.3）に委ねる（JST 9:00前点火なら odds は1回で自然終了）。
+      - name: ignite odds sweep
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          echo "racelist デプロイ成功 → odds を点火（点火A・起点空=当日で新連鎖）"
+          gh workflow run odds.yml -R "${{ github.repository }}"

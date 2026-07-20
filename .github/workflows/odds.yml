@@ -6,10 +6,19 @@
 #   workflow_dispatch により次 run を自己起動し、日中は cron に依存せず ~13-15分間隔を維持する。
 #   workflow_dispatch は GITHUB_TOKEN でも再帰起動が許可される唯一の例外（要 actions: write）。
 #   cron は「朝の起動」＋「連鎖切れの保険」に降格（30分刻み・毎時00分の高負荷を避け :05/:35）。
+#
+# ★点火の冗長化（設計09 §8.6・T-20260720-05）: cron は間引きで丸1日発火しない日が実発生
+#   （2026-07-20 に起動 cron の日中7スロット全間引き→連鎖未点火）。そこで push 点火（点火B）を追加。
+#   ローカルで .github/ignite を書き換えて push するだけで odds を点火できる保険経路。
+#   別途 racelist.yml 側にも「デプロイ成功→odds点火」（点火A）を追加＝三重の起動経路。
 name: odds
 on:
   schedule:
     - cron: "5,35 0-12 * * *"   # UTC 0-12時 = JST 9-21時。連鎖の起動/再シード用（間引かれても数本は発火）
+  push:
+    branches: [main]
+    paths:
+      - ".github/ignite"        # 点火B（設計09 §8.6）: このファイルを push するだけで odds を点火（起点空=当日で新連鎖）
   workflow_dispatch:
     inputs:
       chain_origin_utc:
