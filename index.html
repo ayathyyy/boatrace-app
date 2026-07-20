@@ -95,6 +95,16 @@
   input:focus { outline: 2px solid #9cc4e8; }
   input.invalid { border-color: var(--warn); background: #fff5f5; }
   .hint { font-size: 0.72rem; color: #8fa1b0; }
+
+  /* ===== 欠場（計算対象外）T-20260720-07 ===== */
+  .absent-row { padding: 4px 0 6px; border-bottom: 1px dashed var(--line); margin-bottom: 4px; }
+  .absent-label { display: flex; align-items: center; gap: 6px; font-size: 0.85rem; color: var(--warn); font-weight: bold; cursor: pointer; }
+  .absent-label input[type="checkbox"] { width: auto; flex: none; }
+  .boat-card.absent { background: #f4f6f8; opacity: 0.72; }
+  .boat-card input:disabled { background: #eef1f4; color: #9aa7b2; cursor: not-allowed; }
+  .absent-card { background: #f7f9fb; border-style: dashed; }
+  .absent-badge { display: inline-block; background: #fdecea; color: var(--warn); border: 1px solid #f5c6c3; border-radius: 6px; font-size: 0.85rem; font-weight: bold; padding: 1px 8px; }
+  .absent-item { display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; font-size: 0.9rem; color: var(--sub); }
   a { color: var(--accent); }
 
   /* ===== 掛け金 ===== */
@@ -564,7 +574,8 @@ function applyFetchedOdds(ymd, jcd, rno) {
     else {
       const code = st ? st[i] : null;
       oddsStatus[i] = STAT[code] || "取得中";   // 空欄の理由（旧データ=状態なしは取得中扱い）
-      if (code === "presale") nPre++; else if (code === "absent") nAbs++;
+      if (code === "presale") nPre++;
+      else if (code === "absent") { nAbs++; if (state.boats[i]) state.boats[i].absent = true; }  // 欠場検知→欠場チェックボックスを自動ON＋計算除外（設計02 §7.1・T-20260720-07）
     }
     if (f != null && f >= 1) { state.boats[i].placeOdds = String(f); fHi[i] = hiOf(fv); nf++; }
   }
@@ -600,17 +611,21 @@ function applyFetchedOdds(ymd, jcd, rno) {
    単勝・複勝の確率は較正済み値（calWin/calTop2）を使う。
 ========================================================= */
 function computeAllProbs(confPercents) {
-  const raw = confPercents.map(c => Math.max(Number(c) || 0, 0.01));
-  const tot = raw.reduce((a, b) => a + b, 0);
-  const q = raw.map(v => v / tot);              // 合計1に正規化
+  // null のレーンは欠場＝確率空間から完全除外（設計02 §7.4・T-20260720-07）。それ以外は従来どおり 0.01 下駄。
+  // ★後方互換: 欠場0艇（null無し）なら activeLanes=[1..6] で現行と巡回・正規化・出力が完全一致。
+  const activeLanes = [];
+  for (let l = 1; l <= 6; l++) if (confPercents[l - 1] != null) activeLanes.push(l);
+  const raw = confPercents.map(c => c == null ? 0 : Math.max(Number(c) || 0, 0.01));
+  const tot = activeLanes.reduce((s, l) => s + raw[l - 1], 0);
+  const q = raw.map((v, i) => (tot > 0 && confPercents[i] != null) ? v / tot : 0);   // 合計1に正規化（欠場レーン=0）
   const trifecta = {}, trio = {}, wide = {}, exacta = {}, quinella = {};
-  for (let a = 1; a <= 6; a++) for (let b = 1; b <= 6; b++) {
+  for (const a of activeLanes) for (const b of activeLanes) {
     if (b === a) continue;
     const pab = q[a - 1] * q[b - 1] / (1 - q[a - 1]);
     exacta[`${a}-${b}`] = pab;
     const qk = a < b ? `${a}-${b}` : `${b}-${a}`;
     quinella[qk] = (quinella[qk] || 0) + pab;
-    for (let c = 1; c <= 6; c++) {
+    for (const c of activeLanes) {
       if (c === a || c === b) continue;
       const p3 = pab * q[c - 1] / (1 - q[a - 1] - q[b - 1]);
       trifecta[`${a}-${b}-${c}`] = p3;
@@ -630,9 +645,10 @@ function computeAllProbs(confPercents) {
 function renderAllBets(result) {
   const box = document.getElementById("allBetsTables");
   if (!box) return;
-  const confByLane = [0, 0, 0, 0, 0, 0];
+  const confByLane = [null, null, null, null, null, null];   // 欠場レーンは null のまま＝確率空間から除外（設計02 §7.4・T-20260720-07）
   result.ranked.forEach(b => { confByLane[b.lane - 1] = b.confidence; });
   const P = computeAllProbs(confByLane);
+  const activeLanes = [1, 2, 3, 4, 5, 6].filter(l => confByLane[l - 1] != null);  // 残存艇のみ（単勝・複勝の行を欠場艇を除いて生成）
   const extra = state.oddsExtra || {};
   const exOdds = state.exactaOdds || {};
   const num1 = v => { const n = Number(v); return v != null && !Number.isNaN(n) && n >= 1 ? n : null; };
@@ -643,9 +659,9 @@ function renderAllBets(result) {
 
   const sections = [
     { bt: "単勝", note: "確率=較正済み1着率",
-      rows: [1, 2, 3, 4, 5, 6].map(l => ({ target: String(l), p: calWin(confByLane[l - 1]), lo: getOdds(l - 1), hi: null })) },
+      rows: activeLanes.map(l => ({ target: String(l), p: calWin(confByLane[l - 1]), lo: getOdds(l - 1), hi: null })) },
     { bt: "複勝", note: "確率=較正済み2着以内率・オッズ幅→期待値も幅",
-      rows: [1, 2, 3, 4, 5, 6].map(l => ({ target: String(l), p: calTop2(confByLane[l - 1]),
+      rows: activeLanes.map(l => ({ target: String(l), p: calTop2(confByLane[l - 1]),
         lo: getPlaceOdds(l - 1), hi: num1((extra.fukushoHi || [])[l - 1]) })) },
     { bt: "2連単", note: "Harville近似", map: P.exacta, oddsMap: exOdds },
     { bt: "2連複", note: "Harville近似", map: P.quinella, oddsMap: extra.quinella || {} },
@@ -870,7 +886,8 @@ function getExactaOdds(target) {
    状態（localStorage に保存・復元）
 ========================================================= */
 let state = {
-  boats: Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" })),
+  // absent: 各艇の欠場フラグ（手動チェックボックス。設計02 §7・T-20260720-07）
+  boats: Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "", absent: false })),
   weights: Object.fromEntries(METRICS.map(m => [m.key, m.defWeight])),
   alpha: DEFAULT_ALPHA,
   budget: 1000,
@@ -916,10 +933,14 @@ function buildBoatCards() {
     const c = LANE_COLORS[i];
     const card = document.createElement("div");
     card.className = "boat-card";
+    card.dataset.boat = String(i);   // 欠場時のグレーアウト対象カードを特定する（設計02 §7.5・T-20260720-07）
     card.innerHTML = `
       <div class="boat-head">
         <span class="lane-chip" style="background:${c.bg};color:${c.fg}">${i + 1}</span>
         <input type="text" data-boat="${i}" data-field="name" placeholder="選手名（任意）" maxlength="20">
+      </div>
+      <div class="field-row absent-row">
+        <label class="absent-label"><input type="checkbox" data-boat="${i}" data-field="absent"> ⛔ この艇は欠場（計算から除外）</label>
       </div>
       ${METRICS.map(m => `
         <div class="field-row">
@@ -946,6 +967,7 @@ function fillFormFromState() {
   document.querySelectorAll("#boats input").forEach(inp => {
     const b = Number(inp.dataset.boat);
     const f = inp.dataset.field;
+    if (f === "absent") { inp.checked = isAbsentLane(b); return; }   // 欠場チェックボックス（設計02 §7.5・T-20260720-07）
     inp.value = state.boats[b][f] ?? "";
     inp.classList.remove("invalid");
     // 単勝オッズが空の艇は理由（発売前/欠場/取得中）を placeholder に出す（設計09 §9.5）
@@ -954,7 +976,28 @@ function fillFormFromState() {
       inp.placeholder = (s && (inp.value === "" || inp.value == null)) ? s : "例 3.2";
     }
   });
+  // 欠場艇は指標・オッズ入力を無効化（グレーアウト＝入力不要）。チェックボックス自体は操作可（設計02 §7.5）
+  for (let i = 0; i < 6; i++) {
+    const absent = isAbsentLane(i);
+    document.querySelectorAll(`#boats input[data-boat="${i}"]`).forEach(inp => {
+      if (inp.dataset.field !== "absent") inp.disabled = absent;
+    });
+    const card = document.querySelector(`#boats .boat-card[data-boat="${i}"]`);
+    if (card && card.classList) card.classList.toggle("absent", absent);
+  }
   document.getElementById("budget").value = state.budget;
+}
+
+// 欠場チェックボックスの切替（設計02 §7.1・T-20260720-07）
+// ONで計算・買い目・一覧から除外。手動でOFFにしたら自動検知(oddsStatus=欠場)も解除して上書きを有効化する。
+function setBoatAbsent(i, on) {
+  if (!state.boats[i]) return;
+  state.boats[i].absent = !!on;
+  if (!on && Array.isArray(state.oddsStatus) && state.oddsStatus[i] === "欠場") {
+    state.oddsStatus[i] = null;   // 自動優先だが手動OFFで覆せる（設計02 §7.1）
+  }
+  fillFormFromState();   // 入力欄の有効/無効・グレーアウトを更新
+  saveState();
 }
 
 /* =========================================================
@@ -1001,7 +1044,10 @@ function validateInputs() {
   let firstBad = null;
   document.querySelectorAll('#boats input[type="number"]').forEach(inp => inp.classList.remove("invalid"));
 
+  let activeCount = 0;
   for (let i = 0; i < 6; i++) {
+    if (isAbsentLane(i)) continue;   // 欠場艇は入力必須チェックの対象外（空欄でもエラーにしない・設計02 §7.5・T-20260720-07）
+    activeCount++;
     for (const m of METRICS) {
       const inp = document.querySelector(`#boats input[data-boat="${i}"][data-field="${m.key}"]`);
       const v = inp.value.trim();
@@ -1034,6 +1080,10 @@ function validateInputs() {
         errors.push(`${i + 1}号艇の「複勝オッズ」は空欄にするか 1.0〜999 で入力してください`);
       }
     }
+  }
+
+  if (activeCount === 0) {   // 全艇欠場は予測不能（設計02 §7.5・T-20260720-07）
+    errors.push("全艇が欠場に設定されています。少なくとも1艇の欠場チェックを外してください");
   }
 
   const budget = Number(document.getElementById("budget").value);
@@ -1154,12 +1204,12 @@ function applyRacelistBoats(boats) {
     let course = (b.course === undefined || b.course === null || b.course === "") ? COURSE_AVG_FILL[i] : b.course;
     const tbl = b.regno && RACER_COURSE_WIN[b.regno];
     if (tbl && tbl[i] != null) { course = tbl[i]; nFan++; }
-    state.boats[i] = { name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "" };
+    state.boats[i] = { name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "", absent: false };
   }
   state.exactaOdds = {};
   state.oddsAt = null;
   state.oddsExtra = null;
-  state.oddsStatus = null;   // レース切替で状態ラベルもクリア（設計09 §9.5）
+  state.oddsStatus = null;   // レース切替で状態ラベル・欠場フラグもクリア（設計09 §9.5／設計02 §7.1）
   fillFormFromState();
   saveState();
   return { n, nFan };
@@ -1248,6 +1298,17 @@ function parsePastedExacta(text) {
 /* =========================================================
    予測ロジック（ルールベース）
 ========================================================= */
+// 欠場判定（設計02 §7 欠場艇の予測除外・T-20260720-07）
+// 欠場の判定源は2つ。いずれかが真なら欠場（予測・買い目・全買い目一覧から完全に除外）:
+//   ①手動: state.boats[i].absent（各艇の「欠場」チェックボックス。オッズ未取得でも先に反映可）
+//   ②自動: state.oddsStatus[i]==="欠場"（オッズ自動取込で tansho_status=absent を検知・設計09 §9.5）
+// 自動検知時は applyFetchedOdds が①のフラグも立てUIと同期。手動でOFFにすると②も解除して上書きできる。
+function isAbsentLane(i) {
+  if (state.boats[i] && state.boats[i].absent === true) return true;
+  if (Array.isArray(state.oddsStatus) && state.oddsStatus[i] === "欠場") return true;
+  return false;
+}
+
 // 6艇内での相対値に正規化（0〜1）。invert=true は小さいほど良い指標（ST）
 function normalize(values, invert) {
   const min = Math.min(...values);
@@ -1260,44 +1321,58 @@ function normalize(values, invert) {
 }
 
 function predict() {
-  // 1) 入力値の収集
-  const boats = state.boats.map((b, i) => ({
+  // 1) 入力値の収集（欠場フラグ付き）（設計02 §7・T-20260720-07）
+  const allBoats = state.boats.map((b, i) => ({
     lane: i + 1,
     name: (b.name || "").trim() || `${i + 1}号艇`,
     raw: Object.fromEntries(METRICS.map(m => [m.key, Number(b[m.key])])),
+    absent: isAbsentLane(i),
   }));
+  // 欠場艇は母集団から除外し、残存艇のみで正規化・信頼度・順位を出す。
+  // ★後方互換: 欠場0艇なら active=6艇（順序不変）＝以下の計算は現行 predict と1桁も変わらない。
+  const active = allBoats.filter(b => !b.absent);
+  const absentBoats = allBoats.filter(b => b.absent);
 
-  // 2) 指標ごとに正規化
+  // 2) 指標ごとに正規化（残存艇の分布だけで min-max 正規化＝欠場艇を母集団から外す）
   const normByKey = {};
   METRICS.forEach(m => {
-    normByKey[m.key] = normalize(boats.map(b => b.raw[m.key]), m.invert);
+    normByKey[m.key] = normalize(active.map(b => b.raw[m.key]), m.invert);
   });
 
   // 3) 重み付き合計（ベーススコア 0〜1）
   const alpha = state.alpha / 100;
   const cbMax = Math.max(...COURSE_AVG_WIN);
-  boats.forEach((b, i) => {
+  active.forEach((b, idx) => {
     b.parts = METRICS.map(m => {
-      const norm = normByKey[m.key][i];
+      const norm = normByKey[m.key][idx];
       const contrib = norm * (state.weights[m.key] / 100);
       return { key: m.key, label: m.label, unit: m.unit, raw: b.raw[m.key], norm, weight: state.weights[m.key], contrib };
     });
     b.base = b.parts.reduce((s, p) => s + p.contrib, 0);
 
-    // 4) イン有利補正: コース別の全国平均1着率（最大=1コースを1.0として正規化）を混合
-    b.courseBonus = COURSE_AVG_WIN[i] / cbMax;
+    // 4) イン有利補正: コース別の全国平均1着率（最大=1コースを1.0として正規化）を混合。枠はレーン固定（欠場で動かさない）
+    b.courseBonus = COURSE_AVG_WIN[b.lane - 1] / cbMax;
     b.final = (1 - alpha) * b.base + alpha * b.courseBonus;
   });
 
-  // 5) 信頼度（最終スコアを合計100%に正規化）
-  const sum = boats.reduce((s, b) => s + b.final, 0);
-  boats.forEach(b => { b.confidence = sum > 0 ? (b.final / sum) * 100 : 100 / 6; });
+  // 5) 信頼度（残存艇の最終スコアだけで合計100%に再正規化）
+  const sum = active.reduce((s, b) => s + b.final, 0);
+  active.forEach(b => { b.confidence = sum > 0 ? (b.final / sum) * 100 : (active.length ? 100 / active.length : 0); });
 
-  // 6) 順位付け（同点は枠番が内側の艇を上位に）
-  const ranked = [...boats].sort((a, b) => (b.final - a.final) || (a.lane - b.lane));
+  // 6) 順位付け（残存艇のみ・同点は枠番が内側の艇を上位に）
+  const ranked = [...active].sort((a, b) => (b.final - a.final) || (a.lane - b.lane));
   ranked.forEach((b, i) => { b.rank = i + 1; });
 
-  return { ranked, alpha, closeRace: ranked[0].confidence - ranked[1].confidence < CLOSE_RACE_GAP };
+  // 欠場艇は confidence=0・rank=null で別枠返却（順位表の外に分離表示・買い目/一覧からは除外）
+  absentBoats.forEach(b => { b.confidence = 0; b.rank = null; });
+
+  return {
+    ranked,                                  // 残存艇のみ（欠場0艇なら6艇＝現行と完全一致）
+    absentBoats,                             // 欠場艇 [{lane,name,…}]（順位表の外に分離表示）
+    activeCount: active.length,
+    alpha,
+    closeRace: ranked.length >= 2 && (ranked[0].confidence - ranked[1].confidence < CLOSE_RACE_GAP),
+  };
 }
 
 /* =========================================================
@@ -1323,10 +1398,22 @@ function probExacta(confs, i, j) {
 
 function buildBets(result, budget) {
   const ranked = result.ranked;
-  const confs = ranked.map(b => b.confidence / 100);
-  const [r1, r2, r3] = ranked;
+  const nActive = ranked.length;
 
-  // --- 1) レースの型判定 ---
+  // --- 残存艇0/1 → レース不成立（勝負が成立しないため買い目なし・注記のみ）（設計02 §7.3・T-20260720-07）---
+  if (nActive <= 1) {
+    return {
+      bets: [], raceType: "不成立", effectiveBudget: 0,
+      typeNote: nActive === 0
+        ? "出走6艇すべてが欠場のため、予測・買い目はありません。"
+        : `残り1艇（${ranked[0].lane}号艇）のみで勝負が成立しないため、買い目はありません（レース不成立）。順位表には1位として表示しています。`,
+    };
+  }
+
+  const confs = ranked.map(b => b.confidence / 100);
+  const [r1, r2, r3] = ranked;   // r2/r3 は残存艇が不足すると undefined（下の && でガードし縮退）
+
+  // --- 1) レースの型判定（残存艇の中での1位信頼度）---
   let raceType, typeNote, effectiveBudget = budget;
   if (confs[0] >= 0.40) {
     raceType = "鉄板";
@@ -1340,31 +1427,31 @@ function buildBets(result, budget) {
     typeNote = `予測1位でも信頼度 ${(confs[0] * 100).toFixed(1)}% の混戦。無理は禁物 — **見送りが第一候補**。買うなら的中しやすい複勝のみ・予算の半分（${effectiveBudget.toLocaleString()}円）までに抑える型。`;
   }
 
-  // --- 2) 型ごとの買い目候補（p = 推定的中率）---
+  // --- 2) 型ごとの買い目候補（p = 推定的中率）。残存艇不足の順位参照(r2/r3)は && で自動除外（設計02 §7.3）---
   let bets;
   if (raceType === "鉄板") {
     bets = [
       { type: "単勝",   target: `${r1.lane}`,            desc: `${r1.name}を信頼`,   p: confs[0] },
-      { type: "2連単", target: `${r1.lane}-${r2.lane}`, desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
-      { type: "2連単", target: `${r1.lane}-${r3.lane}`, desc: "本命→3番手",         p: probExacta(confs, 0, 2) },
-      { type: "複勝",   target: `${r2.lane}`,            desc: "対抗の保険",         p: probTop2(confs, 1) },
-    ];
+      r2 && { type: "2連単", target: `${r1.lane}-${r2.lane}`, desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
+      r3 && { type: "2連単", target: `${r1.lane}-${r3.lane}`, desc: "本命→3番手",         p: probExacta(confs, 0, 2) },
+      r2 && { type: "複勝",   target: `${r2.lane}`,            desc: "対抗の保険",         p: probTop2(confs, 1) },
+    ].filter(Boolean);
   } else if (raceType === "標準") {
     bets = [
       { type: "単勝", target: `${r1.lane}`,              desc: `${r1.name}`,        p: confs[0] },
       { type: "複勝", target: `${r1.lane}`,              desc: "本命の保険",         p: probTop2(confs, 0) },
-      { type: "複勝", target: `${r2.lane}`,              desc: "対抗",               p: probTop2(confs, 1) },
-      { type: "2連単", target: `${r1.lane}-${r2.lane}`,  desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
-    ];
-    if (result.closeRace) {
+      r2 && { type: "複勝", target: `${r2.lane}`,              desc: "対抗",               p: probTop2(confs, 1) },
+      r2 && { type: "2連単", target: `${r1.lane}-${r2.lane}`,  desc: "本命→対抗",          p: probExacta(confs, 0, 1) },
+    ].filter(Boolean);
+    if (result.closeRace && r3) {
       bets.push({ type: "2連単", target: `${r1.lane}-${r3.lane}`, desc: "接戦のため分散", p: probExacta(confs, 0, 2) });
     }
   } else {
     bets = [
       { type: "複勝", target: `${r1.lane}`, desc: "混戦は複勝で手堅く", p: probTop2(confs, 0) },
-      { type: "複勝", target: `${r2.lane}`, desc: "〃",                 p: probTop2(confs, 1) },
-      { type: "複勝", target: `${r3.lane}`, desc: "〃",                 p: probTop2(confs, 2) },
-    ];
+      r2 && { type: "複勝", target: `${r2.lane}`, desc: "〃",                 p: probTop2(confs, 1) },
+      r3 && { type: "複勝", target: `${r3.lane}`, desc: "〃",                 p: probTop2(confs, 2) },
+    ].filter(Boolean);
   }
 
   // --- 3) 推定的中率に比例して100円単位で配分（最大剰余方式・合計は必ず予算と一致）---
@@ -1441,22 +1528,34 @@ function renderResult(result) {
     rankWrap.appendChild(card);
   });
 
+  // --- 欠場艇の分離表示（順位表の下に別枠で「〇号艇: 欠場」）（設計02 §7.5・T-20260720-07）---
+  if (result.absentBoats && result.absentBoats.length) {
+    const card = document.createElement("div");
+    card.className = "rank-card absent-card";
+    const chips = result.absentBoats.slice().sort((a, b) => a.lane - b.lane).map(b => {
+      const c = LANE_COLORS[b.lane - 1];
+      return `<span class="absent-item"><span class="lane-chip" style="background:${c.bg};color:${c.fg}">${b.lane}</span>${escapeHtml(b.name)}</span>`;
+    }).join("");
+    card.innerHTML = `<div class="rank-line"><span class="absent-badge">⛔ 欠場（計算対象外）</span>${chips}</div>`;
+    rankWrap.appendChild(card);
+  }
+
   // --- 買い目 ---
   const budget = Number(document.getElementById("budget").value);
   const plan = buildBets(result, budget);
 
-  // レースの型バナー
-  const typeIcon = { "鉄板": "🔒", "標準": "⚖️", "混戦": "🌀" }[plan.raceType];
-  const typeClass = { "鉄板": "t-teppan", "標準": "t-hyojun", "混戦": "t-konsen" }[plan.raceType];
+  // レースの型バナー（不成立＝残存艇0/1のとき 🚫）
+  const typeIcon = { "鉄板": "🔒", "標準": "⚖️", "混戦": "🌀", "不成立": "🚫" }[plan.raceType];
+  const typeClass = { "鉄板": "t-teppan", "標準": "t-hyojun", "混戦": "t-konsen", "不成立": "t-konsen" }[plan.raceType];
   const banner = document.getElementById("raceTypeBanner");
   banner.className = "race-type " + typeClass;
   banner.innerHTML = `<b>${typeIcon} ${plan.raceType}レース</b> — ${plan.typeNote.replace(/\*\*(.+?)\*\*/g, "<b>$1</b>")}`;
 
   // --- 期待値（EV）表示: 較正済み勝率×オッズ（表示と注記のみ。金額配分には使わない）---
   const anyOdds = state.boats.some((_, i) => getOdds(i) !== null || getPlaceOdds(i) !== null) || Object.keys(state.exactaOdds || {}).length > 0;
-  const r1boat = result.ranked[0];
-  const r1Odds = getOdds(r1boat.lane - 1);
-  const r1Ev = r1Odds !== null ? calWin(r1boat.confidence) * r1Odds : null;
+  const r1boat = result.ranked[0];   // 残存0艇（全艇欠場）なら undefined（設計02 §7.5）
+  const r1Odds = r1boat ? getOdds(r1boat.lane - 1) : null;
+  const r1Ev = (r1boat && r1Odds !== null) ? calWin(r1boat.confidence) * r1Odds : null;
   // 券種ごとの期待値セル（単勝=calWin×単勝 / 複勝=calTop2×複勝下限 / 2連単=オッズ源なしで"—"）
   const evCell = b => {
     if (b.type === "単勝") {
@@ -1495,23 +1594,31 @@ function renderResult(result) {
       </tr>`).join("")}
   `;
   const total = plan.bets.reduce((s, b) => s + b.amount, 0);
-  let totalNote =
-    `合計 ${total.toLocaleString()}円 ／ 予算 ${budget.toLocaleString()}円`
-    + (plan.raceType === "混戦" ? `（混戦のため ${plan.effectiveBudget.toLocaleString()}円 に自動減額）` : "")
-    + "　※金額は推定的中率に比例して配分。期待値は表示のみで配分には未反映（配分への反映はフェーズ3.2で判断予定）";
-  if (plan.bets.some(b => b.type === "単勝") && r1Ev !== null && r1Ev < EV_THRESHOLD) {
-    totalNote += "\n⚠ 予測1位はオッズが安く期待値不足（見送り推奨）。それでも買う場合は少額に";
+  let totalNote;
+  if (plan.raceType === "不成立") {   // 残存艇0/1（設計02 §7.3・T-20260720-07）
+    totalNote = "買い目はありません（レース不成立）。";
+  } else {
+    totalNote =
+      `合計 ${total.toLocaleString()}円 ／ 予算 ${budget.toLocaleString()}円`
+      + (plan.raceType === "混戦" ? `（混戦のため ${plan.effectiveBudget.toLocaleString()}円 に自動減額）` : "")
+      + "　※金額は推定的中率に比例して配分。期待値は表示のみで配分には未反映（配分への反映はフェーズ3.2で判断予定）";
+    if (plan.bets.some(b => b.type === "単勝") && r1Ev !== null && r1Ev < EV_THRESHOLD) {
+      totalNote += "\n⚠ 予測1位はオッズが安く期待値不足（見送り推奨）。それでも買う場合は少額に";
+    }
+    if (!anyOdds) {
+      totalNote += "\nℹ 単勝・複勝オッズを入力すると期待値（買う価値）判定が出ます";
+    } else if (state.oddsAt && state.oddsAt !== "手動入力") {
+      totalNote += `\nℹ オッズは ${state.oddsAt} 時点の自動取得値。締切直前は「取り込む」を押し直すか公式ページで最終確認を`;
+    }
   }
-  if (!anyOdds) {
-    totalNote += "\nℹ 単勝・複勝オッズを入力すると期待値（買う価値）判定が出ます";
-  } else if (state.oddsAt && state.oddsAt !== "手動入力") {
-    totalNote += `\nℹ オッズは ${state.oddsAt} 時点の自動取得値。締切直前は「取り込む」を押し直すか公式ページで最終確認を`;
+  // 欠場艇の注記（手動チェック＋自動検知の両方を反映・設計02 §7.5）
+  if (result.absentBoats && result.absentBoats.length) {
+    const lanes = result.absentBoats.slice().sort((a, b) => a.lane - b.lane).map(b => b.lane).join("・");
+    totalNote += `\nℹ ${result.absentBoats.length}艇が欠場（${lanes}号艇）→ 計算・買い目・全券種一覧から除外し、残り${result.ranked.length}艇で再計算しています`;
   }
   if (Array.isArray(state.oddsStatus)) {   // 発売前の歯抜けを結果画面でも説明（設計09 §9.5）
     const pre = state.oddsStatus.filter(s => s === "発売前").length;
-    const abs = state.oddsStatus.filter(s => s === "欠場").length;
     if (pre) totalNote += `\nℹ ${pre}艇はまだ発売前で単勝オッズ未確定です（発売後に「取り込む」を押すと入ります）`;
-    if (abs) totalNote += `\nℹ ${abs}艇は欠場です`;
   }
   document.getElementById("betsTotal").textContent = totalNote;
 
@@ -1721,7 +1828,9 @@ function bindEvents() {
   document.getElementById("boats").addEventListener("input", e => {
     const inp = e.target;
     if (!inp.dataset.field) return;
-    state.boats[Number(inp.dataset.boat)][inp.dataset.field] = inp.value;
+    const b = Number(inp.dataset.boat);
+    if (inp.dataset.field === "absent") { setBoatAbsent(b, inp.checked); return; }   // 欠場チェックボックス（設計02 §7.1・T-20260720-07）
+    state.boats[b][inp.dataset.field] = inp.value;
     inp.classList.remove("invalid");
     saveState();
   });
@@ -1867,7 +1976,8 @@ function bindEvents() {
 
   // サンプルデータ
   document.getElementById("sampleBtn").addEventListener("click", () => {
-    state.boats = SAMPLE.map(s => ({ ...s }));
+    state.boats = SAMPLE.map(s => ({ ...s, absent: false }));   // サンプルは欠場なし（設計02 §7.1・T-20260720-07）
+    state.oddsStatus = null;
     fillFormFromState();
     showErrors([]);
     saveState();
@@ -1891,10 +2001,11 @@ function bindEvents() {
     clearArmed = null;
     btn.textContent = "🗑 入力を全部クリア";
     btn.style.fontWeight = "";
-    state.boats = Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "" }));
+    state.boats = Array.from({ length: 6 }, () => ({ name: "", nat: "", local: "", motor: "", course: "", st: "", odds: "", placeOdds: "", absent: false }));
     state.exactaOdds = {};
     state.oddsAt = null;
     state.oddsExtra = null;
+    state.oddsStatus = null;   // 欠場フラグ・状態ラベルもクリア（設計02 §7.1・T-20260720-07）
     fillFormFromState();
     document.getElementById("resultSection").hidden = true;
     // 貼り付け欄と取込メッセージも一緒にクリアする
