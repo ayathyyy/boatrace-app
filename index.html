@@ -305,7 +305,9 @@
       </div>
       <div class="toolbar" style="margin-top:4px">
         <button type="button" class="btn-primary" id="rlApplyBtn" style="width:auto;padding:10px 18px;font-size:1rem">⬇️ この会場・レースを取り込む</button>
+        <button type="button" class="btn-sub" id="refetchOddsBtn" style="width:auto;padding:10px 18px;font-size:1rem">🌐 公式サイトから今すぐ再取得</button>
       </div>
+      <p class="hint" id="refetchHint" style="margin:4px 0">🌐「今すぐ再取得」= いま公式サイトへ新規アクセスして、選んだレースの最新オッズを取り直します（先に「⬇️ 取り込む」でレースを選んでから使用・反映まで約2〜3分かかるので押したら少しお待ちください）。</p>
       <div class="racelist-links" id="rlLinks"></div>
       <div class="import-note" id="rlNote"></div>
 
@@ -523,6 +525,14 @@ const RACELIST_EMBEDDED = /*RACELIST_START*/null/*RACELIST_END*/;
    ・取得失敗時は何もしない＝既存3経路（アップロード>埋め込み>手入力）へ完全フォールバック。
 ========================================================= */
 const PUBLISH_BASE = "https://ayathyyy.github.io/boatrace-app/";
+/* 🌐 点火C（今すぐ再取得）: Cloudflare Worker のエンドポイント（設計09 §10 / 設計02 §8・T-20260723-02）
+   ・アプリはこの Worker に POST するだけ。Worker がサーバー側だけに保管した GitHub トークンで
+     odds.yml を workflow_dispatch 起動する（生トークンはこのフロントに絶対に置かない）。
+   ・レート制限・CORS(https://ayathyyy.github.io) は Worker 側で担保。
+   ⚠️ TODO（T-20260723-02）: 社長が Cloudflare Worker をデプロイして発行された URL
+      （https://<name>.<subdomain>.workers.dev 形式）を受領後、下の "" にその URL を設定して
+      再度 sync_app.bat → push すること。未設定の間はボタンがガードメッセージを出す。 */
+const IGNITE_WORKER_URL = "";  // 例: "https://boatrace-odds-ignite.xxxx.workers.dev/trigger-odds"
 let fetchedRacelist = null; // 自動取得した出走表（メモリ保持のみ・localStorage に入れない）
 let fetchedOdds = null;     // 自動取得した当日オッズ { date, fetched_at, races: { "jcd-rno": {at,tansho,fukusho,exacta} } }
 
@@ -2034,6 +2044,78 @@ function bindEvents() {
   document.getElementById("rlRace").addEventListener("change", updateRacelistLinks);
   document.getElementById("rlDate").addEventListener("change", refreshRacelistUI);
   document.getElementById("rlApplyBtn").addEventListener("click", applySelectedRace);
+  // 🌐 公式サイトから今すぐ再取得（点火C・Cloudflare Worker 経由）— 設計: 20_設計/09_公開サイト自動収集設計.md §10 / 20_設計/02_フェーズ1_予測ロジック設計.md §8（T-20260723-02）
+  document.getElementById("refetchOddsBtn").addEventListener("click", refetchOddsNow);
+  async function refetchOddsNow() {
+    const note = document.getElementById("rlNote");
+    const btn = document.getElementById("refetchOddsBtn");
+    // ① 先に会場・レースを「取り込む」していること（raceCtx が直近レースの文脈）
+    if (!raceCtx) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 先に会場・レースを選んで「⬇️ この会場・レースを取り込む」を押してください。";
+      return;
+    }
+    // ② Worker URL 未設定ガード（社長のデプロイ前は再取得できない・設計09 §10.6）
+    if (!IGNITE_WORKER_URL) {
+      note.className = "import-note warn";
+      note.textContent = "⚠ 「今すぐ再取得」はまだ準備中です（再取得サーバーのURLが未設定）。設定が済むと使えるようになります。それまでは上の「💰 …オッズを開く」で公式ページを開き、コピーして貼り付けで最新化できます。";
+      return;
+    }
+    const { ymd, jcd, rno } = raceCtx;
+    const key = `${jcd}-${rno}`;
+    // 対象レースの取得時刻（更新検知の基準）。fetchedOdds の日付が対象日と一致する時だけ有効
+    const atOf = () => (fetchedOdds && fetchedOdds.date === ymd && fetchedOdds.races && fetchedOdds.races[key])
+      ? (fetchedOdds.races[key].at || null) : null;
+    const beforeAt = atOf();
+    btn.disabled = true;
+    try {
+      // ③ 仲介サーバー（Worker）へ点火リクエスト
+      note.className = "import-note";
+      note.textContent = "🔄 公式サイトへの再取得を開始しています…";
+      let res;
+      try {
+        res = await fetch(IGNITE_WORKER_URL, { method: "POST" });
+      } catch (e) {
+        // 通信失敗時は何もしない＝直前のオッズ・予測を保持（設計02 §8）
+        note.className = "import-note warn";
+        note.textContent = "⚠ 再取得サーバーに接続できませんでした（通信エラー）。直前のオッズはそのままです。少し待って再度お試しください。";
+        return;
+      }
+      if (res.status === 429) {
+        note.className = "import-note warn";
+        note.textContent = "⚠ 少し前に再取得したばかりです。1分ほど待ってからもう一度お試しください（連打防止）。";
+        return;
+      }
+      if (!res.ok) {
+        note.className = "import-note warn";
+        note.textContent = `⚠ 再取得を開始できませんでした（サーバー応答 ${res.status}）。直前のオッズはそのままです。`;
+        return;
+      }
+      // ④ 反映をポーリング（15秒間隔・最大~2.5分）。対象レースの取得時刻が新しくなったら反映＋再予測
+      note.className = "import-note";
+      note.textContent = "🔄 再取得を開始しました。最新オッズの反映を待っています…（最大約2〜3分・このまま少しお待ちください）";
+      const POLL_INTERVAL_MS = 15000, POLL_TIMEOUT_MS = 150000;
+      const started = Date.now();
+      while (Date.now() - started < POLL_TIMEOUT_MS) {
+        await new Promise(r => setTimeout(r, POLL_INTERVAL_MS));
+        await refreshPublishedOdds(8000);   // 失敗時は前回値のまま（静かにリトライ）
+        const newAt = atOf();
+        if (newAt && newAt !== beforeAt) {
+          // オッズのみ反映（選手情報・欠場チェックは保持）→ 結果とEVを再計算（runPrediction は本 bindEvents 内スコープ）
+          const oddsMsg = applyFetchedOdds(ymd, jcd, rno);
+          runPrediction();
+          note.className = "import-note ok";
+          note.textContent = `✅ 最新オッズ（${newAt}時点）に更新し、予測とEVを再計算しました。` + (oddsMsg ? "\n" + oddsMsg : "");
+          return;
+        }
+      }
+      // ⑤ タイムアウト（無限に粘らない・設計02 §8）
+      note.className = "import-note warn";
+      note.textContent = "⌛ まだ反映を確認できませんでした（公式サイトの更新に時間がかかっている可能性）。しばらくして「⬇️ この会場・レースを取り込む」を押すと最新化できます。";
+    } finally {
+      btn.disabled = false;
+    }
+  }
   document.getElementById("rlFile").addEventListener("change", e => {
     const file = e.target.files && e.target.files[0];
     if (!file) return;
