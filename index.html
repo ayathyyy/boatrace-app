@@ -262,6 +262,62 @@
 
 <main>
 
+  <!-- ===== ⏰ 締切30分前EVピックアップ（設計02 §9.6.1・T-20260729-03）=====
+       ★<main> 直下の最初の子。既存の見出し番号 1〜5 は1つも動かさない（N-1）。
+       ★新規の識別子は id="pickup*" / class="pickup-*" のみ。既存クラスは読み取り専用で再利用する。 -->
+  <section id="pickupSection">
+    <h2>⏰ 締切30分前ピックアップ（全国16場）</h2>
+    <style>
+      #pickupSection { border-left: 4px solid var(--accent, #2b7); }
+      .pickup-meta { color: var(--sub); font-size: .85rem; margin: 2px 0 6px; }
+      .pickup-note { font-size: .85rem; margin: 6px 0; }
+      .pickup-empty { color: var(--sub); font-size: .9rem; padding: 10px 0; line-height: 1.7; }
+      .pickup-card { border: 1px solid var(--line, #ddd); border-radius: 8px; padding: 8px 10px; margin: 10px 0; }
+      .pickup-card-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 10px; }
+      .pickup-venue { font-weight: bold; font-size: 1.02rem; }
+      .pickup-remain { font-weight: bold; }
+      .pickup-remain.soon { color: #b8860b; }
+      .pickup-remain.urgent { color: #c62828; }
+      .pickup-close, .pickup-oddsat { color: var(--sub); font-size: .82rem; }
+      .pickup-oddsat.stale { color: #b8860b; }
+      .pickup-oddsat.bad { color: #c62828; font-weight: bold; }
+      .pickup-count { background: #e8f5e9; color: #1b5e20; border-radius: 10px; padding: 1px 8px; font-size: .8rem; font-weight: bold; }
+      .pickup-links { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+      .pickup-links a, .pickup-links button { font-size: .8rem; }
+      .pickup-racers { margin: 6px 0; }
+      .pickup-racers > summary { cursor: pointer; color: var(--sub); font-size: .85rem; padding: 3px 0; }
+      .pickup-racers td, .pickup-racers th { white-space: nowrap; font-size: .82rem; }
+      .pickup-absent { opacity: .55; }
+      .pickup-bets td, .pickup-bets th { white-space: nowrap; }
+      .pickup-roi-main { font-size: 1.12rem; font-weight: bold; }
+      .pickup-roi-main.good { color: #1b5e20; }
+      .pickup-sub { display: block; color: var(--sub); font-size: .74rem; line-height: 1.5; }
+      .pickup-live.warn { color: #c62828; font-weight: bold; }
+      .pickup-ref { color: var(--sub); font-size: .72rem; }
+      .pickup-foot { color: var(--sub); font-size: .78rem; line-height: 1.7; margin-top: 8px; }
+      .pickup-more { color: var(--sub); font-size: .8rem; margin: 4px 0; }
+    </style>
+    <div class="pickup-meta" id="pickupMeta">読み込み中…</div>
+    <div class="pickup-note" id="pickupNote"></div>
+    <div class="toolbar" style="margin:6px 0">
+      <label>🛒 記録するときの1点あたり掛け金 <input type="number" id="pickupStake" value="100" min="100" step="100" style="width:90px"> 円</label>
+      <button type="button" class="btn-sub" id="pickupReload">🔄 いま再走査する</button>
+    </div>
+    <details class="inhelp" id="pickupHelp">
+      <summary>📖 数字の読み方（想定回収率・実測・期待値と基準）</summary>
+      <p><b>想定回収率</b>＝この買い目に100円賭けたとき、平均で何円戻ってくるかの見込み（過去実績で補正した推定）。<b>120%以上が「買い」の目安</b>です（120%＝100円が平均120円で戻る見込み）。</p>
+      <p><b>期待値と基準</b>＝補正前の生の数字と、その券種の合格ライン。<b>合格ラインは券種ごとに違います</b>（単勝1.2／複勝1.2／ワイド1.06／3連複0.98／2連複0.78／2連単0.59／3連単0.56）。券種によって当たりやすさも配当も違うため、同じ物差しでは測れないからです。基準は毎晩の自動分析で更新されます。</p>
+      <p><b>実測</b>＝実際のオッズを記録して答え合わせできた分の平均回収率です。<b>券種ごとの平均であって、この買い目1点の成績ではありません</b>。判定できたレースがまだ少ないため<b>すべて参考値</b>です。100%未満の券種は「⚠まだ黒字未確認」を赤字で出します。</p>
+      <p><b>確率の <code>較</code> と <code>較*</code></b>＝<code>較</code> は過去1年の実績で較正済み（単勝・複勝）。<code>較*</code> は Harville 近似を券種係数で補正した<b>推定値</b>（残り5券種）です。</p>
+      <p class="basis-note">※ 上の「4. 全買い目の確率・期待値」は<b>補正前の生の値</b>を出し、判定も一律1.2で行います。このピックアップは<b>券種係数で補正した後の推定値</b>なので、同じ買い目でも表示確率が異なります（意図した違いです）。<br>※ 想定回収率が119%台でも🟢買いになることがあります。基準値が四捨五入された値のため生じる1%未満のズレです（判定は「期待値 ≧ 基準」の一本で行っています）。</p>
+    </details>
+    <div id="pickupList"></div>
+    <div class="pickup-foot">
+      判定基準は券種ごとに違います。／実測回収率は券種ごとの平均であって、この買い目1点の成績ではありません。／
+      ⏰は<b>自動取得の出走表がある時だけ</b>使えます（会場・レース選択や予測は今までどおり使えます）。
+    </div>
+  </section>
+
   <!-- ===== 入力 ===== -->
   <section>
     <h2>1. 選手データ入力（6艇）</h2>
@@ -649,36 +705,45 @@ function computeAllProbs(confPercents) {
   return { q, exacta, quinella, trifecta, trio, wide };
 }
 
-// 一覧テーブルの描画（predict 実行のたびに renderResult から呼ぶ）
-function renderAllBets(result) {
-  const box = document.getElementById("allBetsTables");
-  if (!box) return;
-  const confByLane = [null, null, null, null, null, null];   // 欠場レーンは null のまま＝確率空間から除外（設計02 §7.4・T-20260720-07）
-  result.ranked.forEach(b => { confByLane[b.lane - 1] = b.confidence; });
-  const P = computeAllProbs(confByLane);
-  const activeLanes = [1, 2, 3, 4, 5, 6].filter(l => confByLane[l - 1] != null);  // 残存艇のみ（単勝・複勝の行を欠場艇を除いて生成）
+// オッズの出どころだけを差し替える薄いアダプタ（設計: 20_設計/02_フェーズ1_予測ロジック設計.md §9.2.3）
+// 描画（renderAllBets）は state から、全レース走査（scanRaceEv）は fetchedOdds から、同じ形で読む。
+function oddsSrcFromState() {
   const extra = state.oddsExtra || {};
-  const exOdds = state.exactaOdds || {};
+  return {
+    tansho: i => getOdds(i),                       // 866
+    fukushoLo: i => getPlaceOdds(i),               // 873
+    fukushoHi: i => (extra.fukushoHi || [])[i],
+    exacta: state.exactaOdds || {},
+    quinella: extra.quinella || {},
+    wide: extra.wide || {},
+    trifecta: extra.trifecta || {},
+    trio: extra.trio || {},
+  };
+}
+
+// 7券種の買い目行（買い目・確率・オッズ・期待値）を生成する純粋関数（設計 §9.2.3）
+// renderAllBets の行生成部をそのまま移植。描画と走査が同じ行を使うことで EV計算の二重管理を防ぐ。
+// 返り値: [{ bt, note, rows:[{target,p,lo,hi,ev,evHi}] }, …]（7要素）
+// ★ソート順は「確率降順」であって EV 降順ではない（T-20260718-09 社長指定）。この順序は変えないこと。
+//   ピックアップ側は受け取った行を slice() してから自分で並べ替える（§9.6.5）。
+function buildBetRows(P, confByLane, oddsSrc) {
+  const activeLanes = [1, 2, 3, 4, 5, 6].filter(l => confByLane[l - 1] != null);  // 残存艇のみ（単勝・複勝の行を欠場艇を除いて生成）
   const num1 = v => { const n = Number(v); return v != null && !Number.isNaN(n) && n >= 1 ? n : null; };
   const rangeOf = v => Array.isArray(v) ? [num1(v[0]), num1(v[1])] : [num1(v), null];
-  const fmtP = p => (p * 100).toFixed(p >= 0.1 ? 1 : 2) + "%";
-  const fmtEv = (lo, hi) => hi != null && hi.toFixed(2) !== lo.toFixed(2) ? `${lo.toFixed(2)}〜${hi.toFixed(2)}` : lo.toFixed(2);
-  const fmtOdds = (lo, hi) => lo == null ? "—" : (hi != null && hi !== lo ? `${lo}〜${hi}` : String(lo));
 
   const sections = [
     { bt: "単勝", note: "確率=較正済み1着率",
-      rows: activeLanes.map(l => ({ target: String(l), p: calWin(confByLane[l - 1]), lo: getOdds(l - 1), hi: null })) },
+      rows: activeLanes.map(l => ({ target: String(l), p: calWin(confByLane[l - 1]), lo: oddsSrc.tansho(l - 1), hi: null })) },
     { bt: "複勝", note: "確率=較正済み2着以内率・オッズ幅→期待値も幅",
       rows: activeLanes.map(l => ({ target: String(l), p: calTop2(confByLane[l - 1]),
-        lo: getPlaceOdds(l - 1), hi: num1((extra.fukushoHi || [])[l - 1]) })) },
-    { bt: "2連単", note: "Harville近似", map: P.exacta, oddsMap: exOdds },
-    { bt: "2連複", note: "Harville近似", map: P.quinella, oddsMap: extra.quinella || {} },
-    { bt: "ワイド", note: "Harville近似・オッズ幅→期待値も幅", map: P.wide, oddsMap: extra.wide || {}, range: true },
-    { bt: "3連単", note: "Harville近似（較正なし・参考）", map: P.trifecta, oddsMap: extra.trifecta || {} },
-    { bt: "3連複", note: "Harville近似（較正なし・参考）", map: P.trio, oddsMap: extra.trio || {} },
+        lo: oddsSrc.fukushoLo(l - 1), hi: num1(oddsSrc.fukushoHi(l - 1)) })) },
+    { bt: "2連単", note: "Harville近似", map: P.exacta, oddsMap: oddsSrc.exacta },
+    { bt: "2連複", note: "Harville近似", map: P.quinella, oddsMap: oddsSrc.quinella },
+    { bt: "ワイド", note: "Harville近似・オッズ幅→期待値も幅", map: P.wide, oddsMap: oddsSrc.wide, range: true },
+    { bt: "3連単", note: "Harville近似（較正なし・参考）", map: P.trifecta, oddsMap: oddsSrc.trifecta },
+    { bt: "3連複", note: "Harville近似（較正なし・参考）", map: P.trio, oddsMap: oddsSrc.trio },
   ];
 
-  let html = "";
   for (const sec of sections) {
     let rows = sec.rows;
     if (!rows) {
@@ -692,6 +757,28 @@ function renderAllBets(result) {
       r.evHi = r.lo != null && r.hi != null ? r.p * r.hi : null;
     });
     rows.sort((a, b) => b.p - a.p || (b.ev ?? -1) - (a.ev ?? -1)); // 確率の高い順（T-20260718-09 社長指定）
+    sec.rows = rows;
+  }
+  return sections;
+}
+
+// 一覧テーブルの描画（predict 実行のたびに renderResult から呼ぶ）
+function renderAllBets(result) {
+  const box = document.getElementById("allBetsTables");
+  if (!box) return;
+  const confByLane = [null, null, null, null, null, null];   // 欠場レーンは null のまま＝確率空間から除外（設計02 §7.4・T-20260720-07）
+  result.ranked.forEach(b => { confByLane[b.lane - 1] = b.confidence; });
+  const P = computeAllProbs(confByLane);
+  const fmtP = p => (p * 100).toFixed(p >= 0.1 ? 1 : 2) + "%";
+  const fmtEv = (lo, hi) => hi != null && hi.toFixed(2) !== lo.toFixed(2) ? `${lo.toFixed(2)}〜${hi.toFixed(2)}` : lo.toFixed(2);
+  const fmtOdds = (lo, hi) => lo == null ? "—" : (hi != null && hi !== lo ? `${lo}〜${hi}` : String(lo));
+
+  // 行生成は buildBetRows に集約（設計 §9.2.3）。判定は従来どおり evBadge＝EV_THRESHOLD 1.2 固定（§9.3.5）。
+  const sections = buildBetRows(P, confByLane, oddsSrcFromState());
+
+  let html = "";
+  for (const sec of sections) {
+    const rows = sec.rows;
     const nOdds = rows.filter(r => r.lo != null).length;
     const headRow = `<tr><th>買い目</th><th>推定確率</th><th>オッズ</th><th>期待値</th><th>判定</th><th></th></tr>`;
     const rowHtml = r => {
@@ -737,7 +824,11 @@ function oddsForBet(type, target) {
   if (type === "2連単") return getExactaOdds(target);
   return null;
 }
-function addPurchase(betType, target, odds, ev, stakeOverride) {
+// 第6引数 ctxOverride: 記録先のレース {ymd,jcd,rno}（設計02 §9.7.1・T-20260729-03）。
+// 省略時は従来どおりグローバル raceCtx(721) を使う＝既存2箇所の呼び出しはビットレベルで挙動が変わらない。
+// ★raceCtx 自体はここでも書き換えない（設定するのは applySelectedRace のみ・§9.8.2⑤）。
+function addPurchase(betType, target, odds, ev, stakeOverride, ctxOverride) {
+  const ctx = ctxOverride || raceCtx;
   let stake;
   if (stakeOverride != null) {
     stake = Math.round((Number(stakeOverride) || 100) / 100) * 100;   // おすすめ買い目: 行の金額欄（変更可）
@@ -751,9 +842,9 @@ function addPurchase(betType, target, odds, ev, stakeOverride) {
   arr.push({
     id: now.getTime() + "-" + Math.random().toString(36).slice(2, 6),
     ts: now.toISOString(),
-    date: (raceCtx && raceCtx.ymd) || isoToYmd(todayISO()),
-    jcd: raceCtx ? raceCtx.jcd : "",
-    rno: raceCtx ? raceCtx.rno : "",
+    date: (ctx && ctx.ymd) || isoToYmd(todayISO()),
+    jcd: ctx ? ctx.jcd : "",
+    rno: ctx ? ctx.rno : "",
     betType, target,
     odds: odds != null ? odds : null,   // 記録時点のオッズ（複勝・ワイドは下限）
     ev: ev != null ? ev : null,
@@ -1200,20 +1291,33 @@ function parsePastedRacelist(text) {
   return { boats, warnings };
 }
 
+// 出走表6艇 → state.boats と同一形の行に変換する純粋部（設計: 20_設計/02_フェーズ1_予測ロジック設計.md §9.2.2）
+// applyRacelistBoats の前半（艇数クランプ・course補完・nFan集計）をそのまま切り出したもの。副作用ゼロ＝
+// 全レース走査（§9.5.3）から state を汚さずに呼べる。
+// 戻り値: { rows, n, nFan }。rows[i] は state.boats[i] と同一形＋fromFan（個人実績で埋めたか／平均補完か・§9.6.4 の注記に使う）。
+// ★rows.length === n。艇数が6未満ならそのまま短い配列を返す（6要素に整えるのは呼び出し側の責務・§9.2.2）。
+function racelistBoatsToRows(boats) {
+  const n = Math.min(boats.length, 6);
+  let nFan = 0;
+  const rows = [];
+  for (let i = 0; i < n; i++) {
+    const b = boats[i];
+    let course = (b.course === undefined || b.course === null || b.course === "") ? COURSE_AVG_FILL[i] : b.course;
+    const tbl = b.regno && RACER_COURSE_WIN[b.regno];
+    let fromFan = false;
+    if (tbl && tbl[i] != null) { course = tbl[i]; nFan++; fromFan = true; }
+    rows.push({ name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "", absent: false, fromFan });
+  }
+  return { rows, n, nFan };
+}
+
 // 出走表の6艇データ(name,regno,nat,local,motor,st[,course])を state.boats へ反映する共通処理。
 // 貼り付け(parsePastedRacelist)・会場レース選択・アップロード(racelist_today.json)の全経路で再利用（物差し一致）。
 // course別1着率は登番で RACER_COURSE_WIN と照合、無ければコース平均で補完（現行 importBtn と同ロジック）。
 // 戻り値: { n: 反映した艇数, nFan: 個人実績で補完した艇数 }。他レースの odds/placeOdds/exactaOdds はクリア。
 function applyRacelistBoats(boats) {
-  const n = Math.min(boats.length, 6);
-  let nFan = 0;
-  for (let i = 0; i < n; i++) {
-    const b = boats[i];
-    let course = (b.course === undefined || b.course === null || b.course === "") ? COURSE_AVG_FILL[i] : b.course;
-    const tbl = b.regno && RACER_COURSE_WIN[b.regno];
-    if (tbl && tbl[i] != null) { course = tbl[i]; nFan++; }
-    state.boats[i] = { name: b.name || "", nat: b.nat, local: b.local, motor: b.motor, course, st: b.st, odds: "", placeOdds: "", absent: false };
-  }
+  const { rows, n, nFan } = racelistBoatsToRows(boats);
+  for (let i = 0; i < n; i++) state.boats[i] = rows[i];
   state.exactaOdds = {};
   state.oddsAt = null;
   state.oddsExtra = null;
@@ -1328,13 +1432,18 @@ function normalize(values, invert) {
   });
 }
 
-function predict() {
+// predict() の純粋コア（設計: 20_設計/02_フェーズ1_予測ロジック設計.md §9.2.1）
+// グローバル state を一切参照せず、引数だけで予測を返す＝全レース一括走査（§9.5.3）から呼べる。
+// ★predict() の本体をそのまま移植し、state 参照5箇所だけを引数に置換した。計算式は1文字も変えていない。
+//   （置換: state.boats→boats／isAbsentLane(i)→!!absentFlags[i]／state.alpha→alphaPct／state.weights→weights ×2）
+// METRICS(477)・COURSE_AVG_WIN・CLOSE_RACE_GAP(511)・normalize() は state に依存しない定数／純粋関数のため据え置き。
+function predictFrom(boats, weights, alphaPct, absentFlags) {
   // 1) 入力値の収集（欠場フラグ付き）（設計02 §7・T-20260720-07）
-  const allBoats = state.boats.map((b, i) => ({
+  const allBoats = boats.map((b, i) => ({
     lane: i + 1,
     name: (b.name || "").trim() || `${i + 1}号艇`,
     raw: Object.fromEntries(METRICS.map(m => [m.key, Number(b[m.key])])),
-    absent: isAbsentLane(i),
+    absent: !!absentFlags[i],
   }));
   // 欠場艇は母集団から除外し、残存艇のみで正規化・信頼度・順位を出す。
   // ★後方互換: 欠場0艇なら active=6艇（順序不変）＝以下の計算は現行 predict と1桁も変わらない。
@@ -1348,13 +1457,13 @@ function predict() {
   });
 
   // 3) 重み付き合計（ベーススコア 0〜1）
-  const alpha = state.alpha / 100;
+  const alpha = alphaPct / 100;
   const cbMax = Math.max(...COURSE_AVG_WIN);
   active.forEach((b, idx) => {
     b.parts = METRICS.map(m => {
       const norm = normByKey[m.key][idx];
-      const contrib = norm * (state.weights[m.key] / 100);
-      return { key: m.key, label: m.label, unit: m.unit, raw: b.raw[m.key], norm, weight: state.weights[m.key], contrib };
+      const contrib = norm * (weights[m.key] / 100);
+      return { key: m.key, label: m.label, unit: m.unit, raw: b.raw[m.key], norm, weight: weights[m.key], contrib };
     });
     b.base = b.parts.reduce((s, p) => s + p.contrib, 0);
 
@@ -1381,6 +1490,14 @@ function predict() {
     alpha,
     closeRace: ranked.length >= 2 && (ranked[0].confidence - ranked[1].confidence < CLOSE_RACE_GAP),
   };
+}
+
+// 既存の呼び出し側（runPrediction など）は無改修。state を読んで predictFrom に渡すだけの薄いラッパ。
+// isAbsentLane(i) は state.boats[i].absent と state.oddsStatus[i] の2系統OR（§7.1）。
+// ここで評価してから配列で渡すことで、純粋コアから state 参照が完全に消える（設計 §9.2.1）。
+function predict() {
+  return predictFrom(state.boats, state.weights, state.alpha,
+                     state.boats.map((_, i) => isAbsentLane(i)));
 }
 
 /* =========================================================
@@ -2199,6 +2316,472 @@ function bindEvents() {
   });
 }
 
+/* =========================================================
+   ⏰ 締切30分前EVピックアップ（全国16場横断）
+   設計: 20_設計/02_フェーズ1_予測ロジック設計.md §9（T-20260729-03）
+   要件: ClaudeCodeCompany/10_要件定義部/締切30分前EVピックアップ_要件定義.md（F-1〜12・N-1〜9・AC-1〜11）
+
+   締切まで0〜30分（両端を含む）のレースを全会場横断で走査し、券種別の適正EVを超えた買い目が
+   あるレースだけを締切の近い順に並べる。既存5セクションの表示・計算・見出しは一切変更しない（N-1）。
+   ★走査は副作用ゼロ: state への代入・saveState()・fillFormFromState()・raceCtx への代入を一切しない（N-3）。
+========================================================= */
+
+// ---- 上限・間隔の定数（設計 §9.5.2）----
+const PICKUP_MAX_RACES = 24;        // 同時表示するレース数の上限（重いのは計算ではなくDOM生成・U-5）
+const PICKUP_MAX_PER_RACE = 8;      // 1レースあたりに表示する🟢買い目の点数（超過は「ほか◯点」）
+const PICKUP_REFRESH_MS = 60000;    // 自動更新間隔（U-2・社長の体感で調整する定数）
+const PICKUP_ODDS_MIN_MS = 300000;  // オッズ再取得の最小間隔（5分・N-4 通信を増やさない）
+const PICKUP_STALE_WARN_MIN = 10;   // オッズ鮮度の警告色（分）
+const PICKUP_STALE_BAD_MIN = 20;    // オッズ鮮度の強い警告色（分）
+
+/* ---- 時刻ヘルパ（JST正規化・設計 §9.4.1）----
+   closes は日付を持たない "HH:MM"（JST）。端末のタイムゾーン設定に結果が依存してはならない（N-7）。
+   ★既存の todayISO()(1722) は端末ローカルゲッタで日付を作っており、日付プルダウン・購入履歴の date 欄・
+     期間集計が依存しているため一切変更しない。ピックアップ専用に別途JSTヘルパを持つ（用途を分離する）。 */
+function jstNow() { return new Date(Date.now() + 9 * 3600 * 1000); }              // 以後 UTC系ゲッタで読むとJSTの値になる
+function nowJstMinutes() { return Math.floor(Date.now() / 60000 + 540) % 1440; }  // UTC分 + 540 = JST分（端末TZを一切参照しない）
+function todayJstYmd() { return jstNow().toISOString().slice(0, 10).replace(/-/g, ""); }
+function hmToMin(hm) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(typeof hm === "string" ? hm : "");
+  if (!m) return null;                                   // 不正入力は例外を投げず null（AC-11）
+  const h = Number(m[1]), mi = Number(m[2]);
+  if (!(h >= 0 && h <= 23) || !(mi >= 0 && mi <= 59)) return null;
+  return h * 60 + mi;
+}
+
+/* ---- 券種別の適正EV閾値（設計 §9.3）----
+   毎晩の自動分析が出力する data/thresholds.json をアプリが自動で読む（確定①・固定値の埋め込みにしない）。
+   ★EV_THRESHOLD(852) と evBadge(880) は変更しない。券種別閾値を使うのはこのピックアップ画面だけ（§9.3.5・N-1）。 */
+const THRESHOLD_KEY = "boatrace-thresholds-v1";   // 新規キー。既存3キーには一切触れない（N-2・§9.8.2⑥）
+const BT_KEY = { "単勝": "tansho", "複勝": "fukusho", "2連単": "exacta", "2連複": "quinella", "ワイド": "wide", "3連単": "trifecta", "3連複": "trio" };
+// 3段フォールバックの第3段。公開JSONもキャッシュも取れないときはこの既定値で判定が成立する（N-5・AC-10④）
+const TH_DEFAULTS = {
+  tansho: { label: "単勝", r: 1.000, recommended_ev: 1.20 },
+  fukusho: { label: "複勝", r: 1.000, recommended_ev: 1.20 },
+  exacta: { label: "2連単", r: 2.039, recommended_ev: 0.59 },
+  quinella: { label: "2連複", r: 1.530, recommended_ev: 0.78 },
+  wide: { label: "ワイド", r: 1.134, recommended_ev: 1.06 },
+  trifecta: { label: "3連単", r: 2.133, recommended_ev: 0.56 },
+  trio: { label: "3連複", r: 1.229, recommended_ev: 0.98 },
+};
+let publishedThresholds = null;   // 正規化済みの閾値（メモリ保持）
+
+// 健全性ガード（設計 §9.3.4）: 有限の数値かつ 0 < 値 < 10 のときだけ採用する
+function thNumOk(v) { return typeof v === "number" && Number.isFinite(v) && v > 0 && v < 10; }
+
+// 券種ごとに独立適用。r か recommended_ev のどちらかが壊れていたら「その券種だけ」既定値へ落とす
+// （ファイル全体を捨てない＝部分破損に強い）。live は roi・n がともに有限数のときのみ採用。
+function thSanitizeType(key, raw) {
+  const def = TH_DEFAULTS[key];
+  const src = (raw && typeof raw === "object") ? raw : {};
+  const good = thNumOk(src.r) && thNumOk(src.recommended_ev);
+  const lv = (src.live && typeof src.live === "object") ? src.live : null;
+  const liveOk = lv && Number.isFinite(lv.roi) && Number.isFinite(lv.n) && lv.n > 0;
+  return {
+    key,
+    label: typeof src.label === "string" && src.label ? src.label : def.label,
+    r: good ? src.r : def.r,
+    recommended_ev: good ? src.recommended_ev : def.recommended_ev,
+    break_even_ev: thNumOk(src.break_even_ev) ? src.break_even_ev : null,
+    hit_rate: Number.isFinite(src.hit_rate) ? src.hit_rate : null,
+    n: Number.isFinite(src.n) ? src.n : null,
+    live: liveOk ? { roi: lv.roi, n: lv.n, threshold: Number.isFinite(lv.threshold) ? lv.threshold : null, exact: lv.exact === true } : null,
+    fallback: !good,   // 既定値に落ちたか（画面の注記に使う）
+  };
+}
+
+function thNormalize(o) {
+  const src = (o && typeof o === "object") ? o : {};
+  const types = (src.types && typeof src.types === "object") ? src.types : {};
+  const out = { generated: src.generated || null, until: src.until || null, races: src.races || null,
+                odds_races: src.odds_races || null, judged_total: src.judged_total || null,
+                target_races: Number.isFinite(src.target_races) ? src.target_races : 3000,
+                types: {} };
+  for (const k of Object.keys(TH_DEFAULTS)) out.types[k] = thSanitizeType(k, types[k]);
+  // 判定済みが目標未満の間は全券種に「参考値」バッジを付ける（N-8）
+  out.reference = !(Number.isFinite(out.judged_total) && out.judged_total >= out.target_races);
+  return out;
+}
+
+// 3段フォールバック: ①公開JSON ②localStorageキャッシュ ③ハードコード既定値（設計 §9.3.4）
+async function refreshPublishedThresholds() {
+  const o = await fetchJson(PUBLISH_BASE + "data/thresholds.json");
+  if (o && o.types && typeof o.types === "object") {
+    publishedThresholds = thNormalize(o);
+    try { localStorage.setItem(THRESHOLD_KEY, JSON.stringify(o)); } catch (e) { /* 保存できなくても判定は成立する */ }
+    return publishedThresholds;
+  }
+  if (!publishedThresholds) {
+    try {
+      const raw = localStorage.getItem(THRESHOLD_KEY);
+      const c = raw ? JSON.parse(raw) : null;
+      if (c && c.types) publishedThresholds = thNormalize(c);
+    } catch (e) { /* 壊れたキャッシュは無視 */ }
+  }
+  if (!publishedThresholds) publishedThresholds = thNormalize(null);   // ③既定値
+  return publishedThresholds;
+}
+
+// いま有効な閾値セット（未取得なら既定値を即返す＝走査は閾値の取得完了を待たなくてよい）
+function thInfo() { return publishedThresholds || (publishedThresholds = thNormalize(null)); }
+// bt は buildBetRows の券種名（"単勝" 等）でも thresholds.json のキー（"tansho" 等）でも受ける
+function thTypeOf(bt) { return thInfo().types[BT_KEY[bt] || bt] || null; }
+function evThresholdFor(bt) { const t = thTypeOf(bt); return t ? t.recommended_ev : EV_THRESHOLD; }
+function calFactorFor(bt) { const t = thTypeOf(bt); return t ? t.r : 1; }
+// 券種別判定のバッジ（新設。既存 evBadge(880) は 1.2 固定のまま変更しない・§9.3.5）
+function evBadgeFor(bt, ev) {
+  return (ev != null && ev >= evThresholdFor(bt))
+    ? ` <span class="ev-badge buy">🟢買い</span>`
+    : ` <span class="ev-badge skip">⚪見送り</span>`;
+}
+
+/* ---- 走査対象データの選定（設計 §9.4.4）----
+   ★getActiveRacelist()(1712) を使ってはならない。あれはアップロード(localStorage)を優先するため、
+     古いアップロードがあると closes を持たないデータが返り、公開データがあるのにピックアップが黙って
+     無効化される。ここでは fetchedRacelist(534) を直接見る。
+   ★走査対象を JST の当日データに限定することで日跨ぎ誤照合を構造的に回避する（§9.4.3・N-7）。 */
+function getPickupRacelist() {
+  const data = fetchedRacelist;
+  if (!data || typeof data !== "object") return { ok: false, reason: "noData" };
+  const closes = data.closes;
+  // 将来 U-3（export_racelist.py への closes 追加）が実現したら、ここに取得元の条件を1つ足すだけで対応できる
+  if (!closes || typeof closes !== "object") return { ok: false, reason: "noCloses" };
+  const dates = racelistDates(data);
+  const ymd = todayJstYmd();
+  if (dates.length !== 1) return { ok: false, reason: "multiDate", dates };
+  if (dates[0] !== ymd) return { ok: false, reason: "notToday", dataYmd: dates[0], todayYmd: ymd };
+  const day = data[ymd];
+  if (!day || typeof day !== "object") return { ok: false, reason: "noData" };
+  return { ok: true, ymd, day, closes, venues: (data.venues && typeof data.venues === "object") ? data.venues : {},
+           generatedAt: data.generated_at || null };
+}
+
+/* ---- 時間窓での抽出（設計 §9.4.2・AC-1・AC-2）----
+   rem = hmToMin(closes[key]) − nowMin。対象は 0 ≦ rem ≦ 30（両端を含む＝確定③）。
+   ★時間で絞ってから走査する（重い確率・EV計算は窓に入った ≤24 レースにしか走らせない・§9.5.1）。
+   並びは rem 昇順、同値は "<jcd>-<rno>" の辞書順を第2キーにして安定化する（AC-2 毎回同じ並び）。 */
+function collectUpcomingRaces(src, nowMin) {
+  const out = { entries: [], scanned: 0, noClose: 0, matched: 0, truncated: 0 };
+  if (!src || !src.ok) return out;
+  const keys = Object.keys(src.day);
+  out.scanned = keys.length;
+  const hit = [];
+  for (const key of keys) {
+    const cm = hmToMin(src.closes[key]);
+    if (cm == null) { out.noClose++; continue; }          // そのレースだけ対象外・走査は続行（AC-11）
+    const rem = cm - nowMin;
+    if (rem < 0 || rem > 30) continue;
+    const dash = key.indexOf("-");
+    const jcd = dash > 0 ? key.slice(0, dash) : key;
+    const rno = dash > 0 ? key.slice(dash + 1) : "";
+    hit.push({ key, jcd, rno, venue: src.venues[jcd] || jcd, closeHm: src.closes[key], rem,
+               ymd: src.ymd, boats: src.day[key] });
+  }
+  hit.sort((a, b) => (a.rem - b.rem) || (a.key < b.key ? -1 : a.key > b.key ? 1 : 0));
+  out.matched = hit.length;
+  out.entries = hit.slice(0, PICKUP_MAX_RACES);
+  out.truncated = Math.max(0, hit.length - out.entries.length);
+  return out;
+}
+
+/* ---- 走査（設計 §9.5.3）----
+   ★このブロックは state / raceCtx / localStorage に一切書かない（N-3・§9.8.2⑤⑨）。
+     state.weights と state.alpha は「読むだけ」＝設定画面で重みを変えると走査結果にも反映される
+     （社長の物差しが1つに保たれる）。 */
+
+// 自動取得オッズ（fetchedOdds のレース1件）を buildBetRows のオッズ源に変換するアダプタ（設計 §9.2.3）
+// loOf/hiOf は applyFetchedOdds(568-569) と同一定義＝v2スキーマ（複勝=[lo,hi]）と v1（複勝=数値）の両対応。
+function oddsSrcFromFetched(r) {
+  const o = r || {};
+  const loOf = v => Array.isArray(v) ? v[0] : v;
+  const hiOf = v => Array.isArray(v) ? v[1] : null;
+  const t = Array.isArray(o.tansho) ? o.tansho : [];
+  const f = Array.isArray(o.fukusho) ? o.fukusho : [];
+  return {
+    tansho: i => (t[i] != null && t[i] >= 1 ? t[i] : null),
+    fukushoLo: i => loOf(f[i]),
+    fukushoHi: i => hiOf(f[i]),
+    exacta: o.exacta || {},
+    quinella: o.quinella || {},
+    wide: o.wide || {},
+    trifecta: o.trifecta || {},
+    trio: o.trio || {},
+  };
+}
+
+// レース1件の走査。例外を投げず、走査できないときは {skip:理由} を返す（AC-10・AC-11）
+function scanRaceEv(entry) {
+  const conv = racelistBoatsToRows(entry.boats || []);
+  const rows = conv.rows;
+  if (rows.length !== 6) return { ...entry, skip: "boats", picks: [], nPick: 0 };   // 壊れた出走表（例外を投げない）
+
+  // 自動取得オッズ（当日・同一レース）。無ければオッズ無しとして続行（確率だけは出す）
+  const key = `${entry.jcd}-${entry.rno}`;
+  const od = (fetchedOdds && fetchedOdds.date === entry.ymd && fetchedOdds.races) ? fetchedOdds.races[key] : null;
+
+  // 欠場フラグは applyFetchedOdds(586) と同一基準＝tansho_status が "absent" のときだけ欠場
+  // （presale=発売前・failed=取得中 は欠場ではない）。オッズが無いレースは全 false。
+  const stat = (od && Array.isArray(od.tansho_status)) ? od.tansho_status : null;
+  const absentFlags = [0, 1, 2, 3, 4, 5].map(i => stat ? stat[i] === "absent" : false);
+  if (absentFlags.every(Boolean)) return { ...entry, skip: "allAbsent", picks: [], nPick: 0 };
+
+  const result = predictFrom(rows, state.weights, state.alpha, absentFlags);   // ★state は読むだけ
+  const confByLane = [null, null, null, null, null, null];
+  result.ranked.forEach(b => { confByLane[b.lane - 1] = b.confidence; });
+  const P = computeAllProbs(confByLane);
+  const sections = buildBetRows(P, confByLane, oddsSrcFromFetched(od));
+
+  // 券種別の適正EV以上を🟢買いとして拾う。ev==null（オッズ未取得）は判定対象外。
+  const picks = [];
+  let nAll = 0;
+  for (const sec of sections) {
+    const rec = evThresholdFor(sec.bt);
+    const r = calFactorFor(sec.bt);
+    for (const row of sec.rows) {
+      if (row.ev == null) continue;
+      nAll++;
+      if (row.ev < rec) continue;
+      picks.push({
+        bt: sec.bt, btKey: BT_KEY[sec.bt], target: row.target,
+        p: row.p, lo: row.lo, hi: row.hi, ev: row.ev, evHi: row.evHi,
+        rec, r, roi: row.ev * r, pCal: Math.min(row.p * r, 0.99),   // 表示確率は99%クランプ（§9.6.2）
+      });
+    }
+  }
+  // 想定回収率（EV×r）の降順。券種をまたいで1本の物差しで並ぶ（§9.6.5）。
+  // 同値は BT_ORDER（sections の並び）→買い目文字列で安定化する。
+  const btOrder = {}; sections.forEach((s, i) => { btOrder[s.bt] = i; });
+  picks.sort((a, b) => (b.roi - a.roi) || (btOrder[a.bt] - btOrder[b.bt]) ||
+                       (a.target < b.target ? -1 : a.target > b.target ? 1 : 0));
+
+  return {
+    ...entry,
+    oddsAt: od ? (od.at || null) : null,
+    hasOdds: !!od && nAll > 0,
+    boats: rows, absentFlags, nAll, picks, nPick: picks.length,
+    activeCount: result.activeCount, closeRace: result.closeRace,
+    ranked: result.ranked,
+  };
+}
+
+// 走査の入口（設計 §9.5.1）。時間で絞ってから走査する（3→4の順序が重要）。
+let pickupLastOddsMs = 0;   // オッズ再取得の最小間隔（PICKUP_ODDS_MIN_MS）の管理
+async function runPickupScan(opts) {
+  const o = opts || {};
+  // 1) 券種別閾値（3段フォールバック）＋オッズ（5分に1回まで・N-4 通信を増やさない）
+  if (!o.skipFetch) {
+    await refreshPublishedThresholds();
+    const now = Date.now();
+    if (o.forceOdds || now - pickupLastOddsMs >= PICKUP_ODDS_MIN_MS) {
+      pickupLastOddsMs = now;
+      try { await refreshPublishedOdds(8000); } catch (e) { /* 失敗しても前回値で続行 */ }
+    }
+  }
+  // 2) closes 付き・当日・単一日付のデータのみ採用（無ければ走査せず案内・F-12）
+  const src = getPickupRacelist();
+  if (!src.ok) return { ok: false, reason: src.reason, src, scans: [], scanned: 0, noClose: 0, matched: 0, truncated: 0 };
+  // 3) 時間窓で抽出（0 ≦ rem ≦ 30・締切の近い順）
+  const col = collectUpcomingRaces(src, nowJstMinutes());
+  // 4) 1レースずつ走査
+  const scans = col.entries.map(e => scanRaceEv(e));
+  return { ok: true, src, scans, scanned: col.scanned, noClose: col.noClose,
+           matched: col.matched, truncated: col.truncated, at: Date.now() };
+}
+
+/* ---- 表示（設計 §9.6）----
+   ★選手名は必ず escapeHtml() を通す（XSS回帰の防止・F群で検証）。 */
+
+// 想定回収率の3層表示（確定⑤・F-6・AC-5）。判定（pick）は既に済んでいるので、ここでは再計算しない（§9.6.3）
+function pickupRoiText(p, th) {
+  const main = `<span class="pickup-roi-main good">${Math.round(p.roi * 100)}%</span>`;
+  const sub1 = `<span class="pickup-sub">期待値 ${p.ev.toFixed(2)} / 基準 ${p.rec}</span>`;
+  const t = th.types[p.btKey] || {};
+  const lv = t.live;
+  let sub2;
+  if (!lv) {
+    sub2 = `<span class="pickup-sub">実測 —</span>`;
+  } else {
+    const warn = lv.roi < 1.0;                       // ★券種名をハードコードしない（値は毎晩更新される・§9.6.3）
+    const ref = th.reference ? `・参考値` : "";
+    const small = lv.n < 100 ? `・小標本` : "";
+    sub2 = `<span class="pickup-sub pickup-live${warn ? " warn" : ""}">`
+      + (warn ? `⚠まだ黒字未確認（n=${lv.n}${ref}${small}）` : `実測 ${(lv.roi * 100).toFixed(1)}%（n=${lv.n}${ref}${small}）`)
+      + `</span>`;
+  }
+  return main + sub1 + sub2;
+}
+
+// 1レース分のカード
+function pickupCard(s, th) {
+  const remCls = s.rem <= 5 ? " urgent" : s.rem <= 15 ? " soon" : "";
+  // オッズ鮮度（10分超=警告・20分超=強い警告・§9.6.6）
+  let oddsHtml = `<span class="pickup-oddsat">オッズ 取得時刻不明</span>`;
+  if (s.oddsAt) {
+    const am = hmToMin(s.oddsAt);
+    const el = am == null ? null : nowJstMinutes() - am;
+    const cls = el == null ? "" : el > PICKUP_STALE_BAD_MIN ? " bad" : el > PICKUP_STALE_WARN_MIN ? " stale" : "";
+    const warn = el != null && el > PICKUP_STALE_WARN_MIN ? " ⚠オッズが古い可能性" : "";
+    oddsHtml = `<span class="pickup-oddsat${cls}">オッズ ${escapeHtml(s.oddsAt)}時点${el != null && el >= 0 ? `（${el}分前）` : ""}${warn}</span>`;
+  }
+  const head = `<div class="pickup-card-head">`
+    + `<span class="pickup-venue">${escapeHtml(s.venue)} ${escapeHtml(String(s.rno))}R</span>`
+    + `<span class="pickup-remain${remCls}">⏱ あと${s.rem}分</span>`
+    + `<span class="pickup-close">締切 ${escapeHtml(s.closeHm)}</span>`
+    + oddsHtml
+    + `<span class="pickup-count">🟢${s.nPick}点</span>`
+    + `<span class="pickup-links">`
+    + `<a href="${boatraceUrl("oddstf", s.jcd, s.rno, s.ymd)}" target="_blank" rel="noopener">🌐オッズ</a>`
+    + `<button type="button" class="btn-sub" data-pickup-import="1" data-ymd="${s.ymd}" data-jcd="${s.jcd}" data-rno="${s.rno}">⬇️ このレースを取り込む</button>`
+    + `</span></div>`;
+
+  // 選手データ表（F-7・§9.6.4）
+  const conf = [null, null, null, null, null, null];
+  (s.ranked || []).forEach(b => { conf[b.lane - 1] = b.confidence; });
+  const nFan = s.boats.filter(b => b.fromFan).length;
+  const rows = s.boats.map((b, i) => {
+    const c = LANE_COLORS[i] || { bg: "#eee", fg: "#333" };
+    const ab = s.absentFlags[i];
+    const od = (s.hasOdds && !ab) ? (oddsSrcFromFetched((fetchedOdds && fetchedOdds.races) ? fetchedOdds.races[`${s.jcd}-${s.rno}`] : null).tansho(i)) : null;
+    return `<tr class="${ab ? "pickup-absent" : ""}">`
+      + `<td><span class="lane-chip" style="background:${c.bg};color:${c.fg}">${i + 1}</span></td>`
+      + `<td>${escapeHtml(b.name || `${i + 1}号艇`)}${ab ? " ⛔欠場" : ""}</td>`
+      + `<td>${ab ? "—" : (conf[i] != null ? conf[i].toFixed(1) + "%" : "—")}</td>`
+      + `<td>${b.course}%<span class="pickup-sub">${b.fromFan ? "個人実績" : "平均補完"}</span></td>`
+      + `<td>${b.nat}</td><td>${b.local}</td><td>${b.motor}%</td><td>${b.st}</td>`
+      + `<td>${od != null ? od : "—"}</td></tr>`;
+  }).join("");
+  const racers = `<details class="pickup-racers"><summary>👥 選手データを見る（6艇）</summary>`
+    + `<div class="table-scroll"><table class="bets-table">`
+    + `<tr><th>枠</th><th>選手</th><th>信頼度</th><th>コース別1着率</th><th>全国</th><th>当地</th><th>モーター</th><th>平均ST</th><th>単勝</th></tr>`
+    + rows + `</table></div>`
+    + `<p class="pickup-sub">${nFan}艇は選手個人の公式実績、残り${6 - nFan}艇はコース平均で補完しています。</p></details>`;
+
+  // 買い目リスト（F-4・§9.6.5）— 表示は🟢買いのみ
+  let bets;
+  if (!s.hasOdds) {
+    bets = `<p class="pickup-note">💰 オッズ未取得（発売前の可能性）→ 期待値は出せません</p>`;
+  } else {
+    const shown = s.picks.slice(0, PICKUP_MAX_PER_RACE);
+    const body = shown.map(p => `<tr>`
+      + `<td>${escapeHtml(p.bt)}</td><td><b>${escapeHtml(p.target)}</b></td>`
+      + `<td>${(p.pCal * 100).toFixed(p.pCal >= 0.1 ? 1 : 2)}%<span class="pickup-sub">${p.btKey === "tansho" || p.btKey === "fukusho" ? "較" : "較*"}</span></td>`
+      + `<td>${p.lo}${p.hi != null && p.hi !== p.lo ? `〜${p.hi}` : ""}</td>`
+      + `<td>${pickupRoiText(p, th)}</td>`
+      + `<td>${evBadgeFor(p.bt, p.ev)}</td>`
+      + `<td><button type="button" class="btn-sub" data-pickup-buy="1" data-ymd="${s.ymd}" data-jcd="${s.jcd}" data-rno="${s.rno}"`
+      + ` data-bt="${escapeHtml(p.bt)}" data-target="${escapeHtml(p.target)}" data-odds="${p.lo}" data-ev="${p.ev.toFixed(3)}">🛒</button></td></tr>`).join("");
+    bets = `<div class="table-scroll"><table class="bets-table pickup-bets">`
+      + `<tr><th>券種</th><th>買い目</th><th>確率</th><th>オッズ</th><th>想定回収率</th><th>判定</th><th></th></tr>`
+      + body + `</table></div>`
+      + (s.picks.length > shown.length ? `<p class="pickup-more">ほか ${s.picks.length - shown.length} 点（想定回収率の低い順に省略）</p>` : "");
+  }
+  return `<div class="pickup-card">${head}${racers}${bets}</div>`;
+}
+
+function renderPickup(res) {
+  const list = document.getElementById("pickupList");
+  const meta = document.getElementById("pickupMeta");
+  if (!list || !meta) return;                     // DOMが無くても例外を出さない（§9.8.1）
+  const th = thInfo();
+  if (!res || !res.ok) {
+    const msg = {
+      noData: "⏰締切ピックアップは<b>自動取得の出走表がある時だけ</b>使えます。<br>（会場・レース選択や予測は今までどおり使えます）",
+      noCloses: "⏰締切ピックアップは<b>自動取得の出走表がある時だけ</b>使えます（貼り付け・アップロードのデータには締切時刻が入っていません）。<br>（会場・レース選択や予測は今までどおり使えます）",
+      notToday: "本日のデータではないため走査しません（締切時刻は日付を持たないため、誤って別の日と照合しない設計です）。",
+      multiDate: "複数日のデータが混在しているため走査しません（締切時刻がどの日のものか判別できないため）。",
+    }[(res && res.reason) || "noData"] || "いま走査できるデータがありません。";
+    meta.textContent = "";
+    list.innerHTML = `<p class="pickup-empty">${msg}</p>`;
+    return;
+  }
+  const cards = res.scans.filter(s => !s.skip && s.nPick > 0);   // 既定は🟢買いが1点以上のレースのみ（U-4）
+  const noOdds = res.scans.filter(s => !s.skip && !s.hasOdds).length;
+  const parts = [`走査 ${res.scanned} レース中 ${res.matched} 件が締切30分以内`, `🟢買いのあるレース ${cards.length} 件`];
+  if (res.noClose) parts.push(`※締切時刻不明の ${res.noClose} レースは対象外`);
+  if (res.truncated) parts.push(`※表示は上限 ${PICKUP_MAX_RACES} レースまで（ほか ${res.truncated} 件）`);
+  if (noOdds) parts.push(`※${noOdds} レースはオッズ未取得（発売前の可能性）→ 期待値は出せません`);
+  if (th.generated) parts.push(`基準の更新 ${escapeHtml(String(th.generated).slice(0, 10))}`);
+  meta.innerHTML = parts.join("　/　");
+
+  if (!cards.length) {
+    const why = res.matched === 0
+      ? "いま締切30分以内のレースはありません。"
+      : (noOdds >= res.matched
+        ? "💰 オッズ未取得（発売前の可能性）→ 期待値は出せません。"
+        : "締切30分以内のレースはありますが、いま基準を超える買い目はありません。");
+    list.innerHTML = `<p class="pickup-empty">${why}<br>（走査したレース数 ${res.scanned} 件・自動で1分ごとに更新します）</p>`;
+    return;
+  }
+  list.innerHTML = cards.map(s => pickupCard(s, th)).join("");
+}
+
+/* ---- 起動と自動更新（F-9・§9.5.5）---- */
+let pickupTimer = null;
+let pickupBusy = false;
+async function pickupRefresh(opts) {
+  if (pickupBusy) return;
+  pickupBusy = true;
+  try { renderPickup(await runPickupScan(opts)); }
+  catch (e) { /* 新機能の失敗が既存機能を止めない（N-5） */ }
+  finally { pickupBusy = false; }
+}
+
+// ★起動シーケンスの最終行に追加し、全体を try/catch で包む（§9.8.1・§9.8.3⑥）
+function initPickup() {
+  const list = document.getElementById("pickupList");
+  if (!list) return;                                  // DOMが無ければ何もしない（例外を出さない）
+  // 「⬇️ このレースを取り込む」→ 既存の applySelectedRace()(1765) をそのまま呼ぶ（無改修で再利用・F-10）
+  list.addEventListener("click", e => {
+    // 🛒 購入記録（確定④＝記録するだけ・F-8・AC-8）
+    const buy = e.target.closest("button[data-pickup-buy]");
+    if (buy) {
+      const d = buy.dataset;
+      const note = document.getElementById("pickupNote");
+      const stakeEl = document.getElementById("pickupStake");   // ★#allBetsStake(415) には触れない
+      const stake = Number(stakeEl && stakeEl.value) || 100;
+      // 第6引数に「そのカードのレース」を渡す＝直前に別レースを予測していても記録先が入れ替わらない（AC-8）
+      addPurchase(d.bt, d.target, Number(d.odds), Number(d.ev), stake, { ymd: d.ymd, jcd: d.jcd, rno: d.rno });
+      // §2〜§5 は #resultSection(376) が hidden のあいだ画面に出ない。既存セクションを勝手に開かず（N-1）、
+      // 代わりに #pickupNote で結果を伝える（§9.7.4）。
+      if (note) note.innerHTML = `✅ ${escapeHtml(d.jcd)}場 ${escapeHtml(d.rno)}R ${escapeHtml(d.bt)} ${escapeHtml(d.target)} を`
+        + ` ${stake}円で記録しました（📒「5. 購入履歴と収支」に入っています。予測を1回実行すると画面に表示されます）`;
+      return;
+    }
+    const imp = e.target.closest("button[data-pickup-import]");
+    if (!imp) return;
+    const note = document.getElementById("pickupNote");
+    try {
+      const d = imp.dataset;
+      const iso = `${d.ymd.slice(0, 4)}-${d.ymd.slice(4, 6)}-${d.ymd.slice(6)}`;
+      const dt = document.getElementById("rlDate"), vn = document.getElementById("rlVenue"), rc = document.getElementById("rlRace");
+      // ★<select>.value は「存在する option」しか受け付けないため、値を入れる前に既存の再構築関数を呼ぶ。
+      //   refreshRacelistUI()(1820) / refreshRaceOptions()(1805) は無改修で再利用するだけ（§9.7.3・N-1）。
+      if (dt) dt.value = iso;
+      refreshRacelistUI();          // 日付に応じて会場プルダウンを作り直す
+      if (vn) vn.value = d.jcd;
+      refreshRaceOptions();         // 会場に応じてレースプルダウンを作り直す
+      if (rc) rc.value = d.rno;
+      applySelectedRace();          // 既存の取り込み処理をそのまま呼ぶ（raceCtx 設定・出走表投入・オッズ反映）
+      if (note) note.innerHTML = `⬇️ ${escapeHtml(d.jcd)}場 ${escapeHtml(d.rno)}R を「1. 選手データ入力」に取り込みました。下の「予測する」で詳細を見られます。`;
+    } catch (err) {
+      if (note) note.textContent = "取り込みに失敗しました。会場・レース選択から手動で取り込んでください。";
+    }
+  });
+  document.getElementById("pickupReload").addEventListener("click", () => pickupRefresh({ forceOdds: true }));
+
+  // 起動直後は fetchedRacelist がまだ null（initRacelistUI の取得が非同期）。
+  // まず1回走査 → 取れなければ案内を出し、出走表の取得完了後にもう一度走査する（§9.5.5）。
+  pickupRefresh().then(() => refreshPublishedRacelist()).then(() => pickupRefresh({ skipFetch: true })).catch(() => { });
+
+  // 60秒ごとに再走査。表示中のタブでだけ実行する（バックグラウンドで電池を食わない）
+  pickupTimer = setInterval(() => {
+    if (document.visibilityState === "visible") pickupRefresh();
+  }, PICKUP_REFRESH_MS);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") pickupRefresh();   // 復帰時は即時1回
+  });
+}
+
 // ---- 起動 ----
 loadState();
 buildBoatCards();
@@ -2213,6 +2796,9 @@ renderPurchases();   // 📒 購入履歴の初期表示（T-20260718-08）
 fillFormFromState();
 bindEvents();
 initRacelistUI();  // 会場・レース選択UIの初期化（プルダウン生成・日付既定・ディープリンク）
+// ⏰ 締切30分前EVピックアップ（設計02 §9.8.3⑥・T-20260729-03）
+// ★必ず最終行。try/catch で包み、新機能の失敗が既存の起動シーケンスを一切止めないようにする（N-5・AC-10⑤）
+try { initPickup(); } catch (e) { /* 新機能が使えなくても既存機能はすべて動く */ }
 </script>
 </body>
 </html>
