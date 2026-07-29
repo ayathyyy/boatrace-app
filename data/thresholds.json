@@ -1,0 +1,115 @@
+{
+ "generated": "2026-07-28T22:31:53",
+ "until": "2026-07-27",
+ "races": 57429,
+ "odds_races": 2784,
+ "judged_total": 2348,
+ "target_races": 3000,
+ "types": {
+  "tansho": {
+   "label": "単勝",
+   "prob_model": "較正済み確率",
+   "r": 1.0,
+   "break_even_ev": 1.0,
+   "recommended_ev": 1.2,
+   "hit_rate": 0.5544,
+   "n": 57429,
+   "live": {
+    "roi": 1.3506,
+    "n": 547,
+    "threshold": 1.2,
+    "exact": true
+   }
+  },
+  "fukusho": {
+   "label": "複勝",
+   "prob_model": "較正済み確率",
+   "r": 1.0,
+   "break_even_ev": 1.0,
+   "recommended_ev": 1.2,
+   "hit_rate": 0.7294,
+   "n": 57429,
+   "live": {
+    "roi": 1.4586,
+    "n": 157,
+    "threshold": 1.2,
+    "exact": true
+   }
+  },
+  "exacta": {
+   "label": "2連単",
+   "prob_model": "Harville近似",
+   "r": 2.039,
+   "break_even_ev": 0.49,
+   "recommended_ev": 0.59,
+   "hit_rate": 0.2117,
+   "n": 57429,
+   "live": {
+    "roi": 0.8028,
+    "n": 568,
+    "threshold": 0.6,
+    "exact": false
+   }
+  },
+  "quinella": {
+   "label": "2連複",
+   "prob_model": "Harville近似",
+   "r": 1.53,
+   "break_even_ev": 0.65,
+   "recommended_ev": 0.78,
+   "hit_rate": 0.293,
+   "n": 57429,
+   "live": {
+    "roi": 0.9903,
+    "n": 381,
+    "threshold": 0.8,
+    "exact": false
+   }
+  },
+  "wide": {
+   "label": "ワイド",
+   "prob_model": "Harville近似",
+   "r": 1.134,
+   "break_even_ev": 0.88,
+   "recommended_ev": 1.06,
+   "hit_rate": 0.5269,
+   "n": 57429,
+   "live": {
+    "roi": 1.424,
+    "n": 104,
+    "threshold": 1.1,
+    "exact": false
+   }
+  },
+  "trifecta": {
+   "label": "3連単",
+   "prob_model": "Harville近似",
+   "r": 2.133,
+   "break_even_ev": 0.47,
+   "recommended_ev": 0.56,
+   "hit_rate": 0.082,
+   "n": 57429,
+   "live": {
+    "roi": 1.1909,
+    "n": 395,
+    "threshold": 0.6,
+    "exact": false
+   }
+  },
+  "trio": {
+   "label": "3連複",
+   "prob_model": "Harville近似",
+   "r": 1.229,
+   "break_even_ev": 0.81,
+   "recommended_ev": 0.98,
+   "hit_rate": 0.222,
+   "n": 57429,
+   "live": {
+    "roi": 0.8695,
+    "n": 266,
+    "threshold": 1.0,
+    "exact": false
+   }
+  }
+ }
+}
