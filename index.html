@@ -379,7 +379,7 @@
         <button type="button" class="btn-primary" id="rlApplyBtn" style="width:auto;padding:10px 18px;font-size:1rem">⬇️ この会場・レースを取り込む</button>
         <button type="button" class="btn-sub" id="refetchOddsBtn" style="width:auto;padding:10px 18px;font-size:1rem">🌐 公式サイトから今すぐ再取得</button>
       </div>
-      <p class="hint" id="refetchHint" style="margin:4px 0">🌐「今すぐ再取得」= いま公式サイトへ新規アクセスして、選んだレースの<strong>単勝・複勝・2連単</strong>オッズをその場で取り直します（先に「⬇️ 取り込む」でレースを選んでから使用・ふつうは<strong>2〜3秒</strong>で更新されます）。3連単・3連複・ワイドは自動収集ぶんのまま残ります。</p>
+      <p class="hint" id="refetchHint" style="margin:4px 0">🌐「今すぐ再取得」= いま公式サイトへ新規アクセスして、選んだレースの<strong>単勝・複勝・2連単</strong>オッズをその場で取り直します（先に「⬇️ 取り込む」でレースを選んでから使用・公式サイトの応答が遅いため<strong>ふつう10秒ほど</strong>かかります。押すと経過秒が出るのでそのままお待ちください）。3連単・3連複・ワイドは自動収集ぶんのまま残ります。</p>
       <div class="racelist-links" id="rlLinks"></div>
       <div class="import-note" id="rlNote"></div>
 
@@ -2180,11 +2180,20 @@ function bindEvents() {
      旧版は Cloudflare Worker から GitHub Actions（odds.yml）を起動して反映を待つ方式だったが、
      並行グループ site-deploy の占有率がほぼ100%（1回795秒・自己連鎖13分間隔）で押した run は必ず
      pending に入り、反映まで13〜26分。150秒で打ち切っていたため100%必ずタイムアウトしていた（設計09 §10.7）。
-     → Worker が公式ページ2枚を直接取得・解析して返す「即時取得D」に変更（応答2〜3秒・ポーリング不要）。
+     → Worker が公式ページ2枚を直接取得・解析して返す「即時取得D」に変更（ポーリング不要）。
      ★フォールバック3段階（設計02 §8.2）: ①新経路が成功→即反映 ②404/405＝Worker が旧版→従来の点火C＋
        ポーリングに落ちる ③通信失敗・エラー→state に一切書かず直前のオッズ・予測を保持 */
   document.getElementById("refetchOddsBtn").addEventListener("click", refetchOddsNow);
-  const REFETCH_TIMEOUT_MS = 15000;                                  // 新経路の応答待ち上限
+  /* 新経路の応答待ち上限（設計09 §10.8／設計02 §8.6）。
+     ★2026-08-01 本番実測で 15000 → 30000 に引き上げ。根拠:
+       ・公式サイト自体の応答が遅く、しかも時間帯で大きく変動する
+         （Worker内部計測 oddstf 8,099ms / odds2tf 10,139ms・秘書PCから直接も平均約10秒 @17時台、
+          開発PCから 9,578ms @20:38、一方 16:55 時点は 63〜142ms）
+       ・これは当方の実装ではなく上流の速度。2ページ並列取得なのでこれ以上短縮できない。
+       ・社長が使うのは締切直前＝サイトが最も混む時間帯なので、遅い側に合わせて余裕を取る。
+       10秒級の実測に対して3倍の余裕。超過時はフォールバック③（直前のオッズを保持）に落ちる。 */
+  const REFETCH_TIMEOUT_MS = 30000;
+  const REFETCH_TICK_MS = 1000;                                      // 取得中の経過秒表示の更新間隔
   const IGNITE_POLL_INTERVAL_MS = 30000, IGNITE_POLL_TIMEOUT_MS = 1200000;  // 旧動作: 30秒間隔・最大20分
   async function refetchOddsNow() {
     const note = document.getElementById("rlNote");
@@ -2206,7 +2215,14 @@ function bindEvents() {
     btn.disabled = true;
     try {
       note.className = "import-note";
-      note.textContent = "🔄 公式サイトから最新オッズを取得しています…";
+      // ★公式サイトの応答が10秒級なので、無反応に見えないよう経過秒を出し続ける（設計02 §8.6）
+      const startedAt = Date.now();
+      const showWaiting = () => {
+        const sec = Math.floor((Date.now() - startedAt) / 1000);
+        note.textContent = `🔄 公式サイトから最新オッズを取得しています…（${sec}秒／ふつう10秒ほどかかります。そのままお待ちください）`;
+      };
+      showWaiting();
+      const ticker = setInterval(showWaiting, REFETCH_TICK_MS);
       // ③ 新経路（即時取得D）: GET {WORKER}/odds?jcd=&rno=&hd=（設計09 §10.8.2）
       const url = IGNITE_WORKER_URL.replace(/\/+$/, "") +
         `/odds?jcd=${encodeURIComponent(jcd)}&rno=${encodeURIComponent(rno)}&hd=${encodeURIComponent(ymd)}`;
@@ -2219,11 +2235,15 @@ function bindEvents() {
         netErr = e;                       // 通信失敗・タイムアウト・CORS 拒否
       } finally {
         clearTimeout(timer);
+        clearInterval(ticker);            // 経過秒表示を止める（この後の文言を上書きさせない）
       }
       // ★フォールバック③: 通信失敗時は state に一切書かない＝直前のオッズ・予測を保持（設計02 §8.2）
       if (netErr) {
         note.className = "import-note warn";
-        note.textContent = "⚠ 再取得サーバーに接続できませんでした（通信エラー）。直前のオッズはそのままです。少し待って再度お試しください。";
+        // 打ち切り（時間切れ）と通信不達は原因が違うので文言を分ける
+        note.textContent = (netErr && netErr.name === "AbortError")
+          ? `⚠ 公式サイトの応答が ${Math.round(REFETCH_TIMEOUT_MS / 1000)} 秒以内に返りませんでした（混雑している可能性）。直前のオッズはそのままです。少し待って再度お試しください。`
+          : "⚠ 再取得サーバーに接続できませんでした（通信エラー）。直前のオッズはそのままです。少し待って再度お試しください。";
         return;
       }
       // ★フォールバック②: 404/405 ＝ Worker がまだ新経路を持たない（旧版）→ 従来の点火C＋ポーリングへ
