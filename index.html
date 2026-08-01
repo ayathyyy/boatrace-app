@@ -295,16 +295,32 @@
       .pickup-live.warn { color: #c62828; font-weight: bold; }
       .pickup-ref { color: var(--sub); font-size: .72rem; }
       .pickup-foot { color: var(--sub); font-size: .78rem; line-height: 1.7; margin-top: 8px; }
-      .pickup-more { color: var(--sub); font-size: .8rem; margin: 4px 0; }
+      /* ★おすすめ買い目（レース型・金額・合計）— T-20260801-01・設計02 §9.6.5 */
+      .pickup-typerow { margin: 8px 0 4px; line-height: 1.6; }
+      .pickup-type { border-radius: 10px; padding: 1px 9px; font-size: .82rem; font-weight: bold; margin-right: 6px; white-space: nowrap; }
+      .pickup-type.tetsu { background: #e8f5e9; color: #1b5e20; }
+      .pickup-type.hyojun { background: #e3f2fd; color: #0d47a1; }
+      .pickup-type.konsen { background: #fff3e0; color: #b8860b; }
+      .pickup-type.fusei { background: #eee; color: #555; }
+      .pickup-typenote { font-size: .84rem; }
+      .pickup-desc { font-size: .82rem; color: var(--sub); white-space: normal; min-width: 6em; }
+      .pickup-amount { text-align: right; font-weight: bold; }
+      .pickup-skip { opacity: .62; }
+      .pickup-total { font-size: .84rem; margin: 4px 0 2px; white-space: pre-wrap; }
+      .pickup-budget-note { color: var(--sub); font-size: .78rem; margin: 2px 0 0; }
     </style>
     <div class="pickup-meta" id="pickupMeta">読み込み中…</div>
     <div class="pickup-note" id="pickupNote"></div>
     <div class="toolbar" style="margin:6px 0">
-      <label>🛒 記録するときの1点あたり掛け金 <input type="number" id="pickupStake" value="100" min="100" step="100" style="width:90px"> 円</label>
+      <label>💴 1レースの予算 <input type="number" id="pickupStake" value="1000" min="100" step="100" style="width:90px"> 円</label>
+      <label class="absent-label"><input type="checkbox" id="pickupOnlyBuy" checked> 🟢買いがあるレースだけ表示</label>
       <button type="button" class="btn-sub" id="pickupReload">🔄 いま再走査する</button>
     </div>
+    <p class="pickup-budget-note">※ この予算を、レースの型（🔒鉄板／⚖️標準／🌀混戦）に応じたおすすめ買い目へ自動で配分します。🛒はその買い目に配分された金額で記録します。</p>
     <details class="inhelp" id="pickupHelp">
-      <summary>📖 数字の読み方（想定回収率・実測・期待値と基準）</summary>
+      <summary>📖 数字の読み方（レースの型・想定回収率・実測・期待値と基準）</summary>
+      <p><b>レースの型</b>＝予測1位の信頼度でそのレースの買い方を決めています。<b>🔒鉄板</b>（40%以上）は単勝を軸に2連単で上乗せ、<b>⚖️標準</b>（25%以上）は単勝＋複勝で手堅く2連単は絞る、<b>🌀混戦</b>（25%未満）は<b>見送りが第一候補</b>で、買うなら複勝だけ・予算も半分に自動で減らします。表に出るのは「この予算ならこう買う」という買い方そのものです（3〜5点）。</p>
+      <p><b>金額</b>＝上の「1レースの予算」を、当たりやすさに比例して100円単位で配分した額です（合計は必ず予算と一致します）。🛒はこの配分額で記録します。</p>
       <p><b>想定回収率</b>＝この買い目に100円賭けたとき、平均で何円戻ってくるかの見込み（過去実績で補正した推定）。<b>120%以上が「買い」の目安</b>です（120%＝100円が平均120円で戻る見込み）。</p>
       <p><b>期待値と基準</b>＝補正前の生の数字と、その券種の合格ライン。<b>合格ラインは券種ごとに違います</b>（単勝1.2／複勝1.2／ワイド1.06／3連複0.98／2連複0.78／2連単0.59／3連単0.56）。券種によって当たりやすさも配当も違うため、同じ物差しでは測れないからです。基準は毎晩の自動分析で更新されます。</p>
       <p><b>実測</b>＝実際のオッズを記録して答え合わせできた分の平均回収率です。<b>券種ごとの平均であって、この買い目1点の成績ではありません</b>。判定できたレースがまだ少ないため<b>すべて参考値</b>です。100%未満の券種は「⚠まだ黒字未確認」を赤字で出します。</p>
@@ -2328,7 +2344,8 @@ function bindEvents() {
 
 // ---- 上限・間隔の定数（設計 §9.5.2）----
 const PICKUP_MAX_RACES = 24;        // 同時表示するレース数の上限（重いのは計算ではなくDOM生成・U-5）
-const PICKUP_MAX_PER_RACE = 8;      // 1レースあたりに表示する🟢買い目の点数（超過は「ほか◯点」）
+// ★PICKUP_MAX_PER_RACE(8) は T-20260801-01 で廃止。buildBets の出力は1レース3〜5点で上限に達しない（§9.5.2）
+const PICKUP_DEFAULT_BUDGET = 1000; // 1レースの予算の既定値（#pickupStake が読めないときのフォールバック・§9.5.2）
 const PICKUP_REFRESH_MS = 60000;    // 自動更新間隔（U-2・社長の体感で調整する定数）
 const PICKUP_ODDS_MIN_MS = 300000;  // オッズ再取得の最小間隔（5分・N-4 通信を増やさない）
 const PICKUP_STALE_WARN_MIN = 10;   // オッズ鮮度の警告色（分）
@@ -2509,11 +2526,34 @@ function oddsSrcFromFetched(r) {
   };
 }
 
+/* 1レースの予算（#pickupStake）。★T-20260801-01 で意味が変わった（1点あたりの掛け金 → 1レースの予算）。
+   buildBets は「予算を各買い目へ配分する」方式のため、レース単位の予算を受ける（設計 §9.5.1・§9.6.1）。 */
+function pickupBudget() {
+  const el = document.getElementById("pickupStake");
+  const v = Number(el && el.value);
+  if (!(v > 0)) return PICKUP_DEFAULT_BUDGET;
+  return Math.max(100, Math.round(v / 100) * 100);
+}
+
+/* buildBets の1点（券種・買い目）に対応する buildBetRows の行を引く（設計 §9.5.3-7）。
+   ★確率・EV・想定回収率・🟢判定は必ずこちらの行を正とする。buildBets が持つ p は「配分用の推定的中率」で
+     あり、券種較正係数 r（§9.3）はそれに対して較正されていないため、混ぜると恒等式(AC-4)が崩れる。 */
+function pickupFindRow(sections, type, target) {
+  for (const sec of sections) {
+    if (sec.bt !== type) continue;
+    for (const r of sec.rows) if (r.target === target) return r;
+    return null;
+  }
+  return null;
+}
+
 // レース1件の走査。例外を投げず、走査できないときは {skip:理由} を返す（AC-10・AC-11）
-function scanRaceEv(entry) {
+// ★budget は「1レースの予算」（省略時は PICKUP_DEFAULT_BUDGET）
+function scanRaceEv(entry, budget) {
+  const bud = Number(budget) > 0 ? Number(budget) : PICKUP_DEFAULT_BUDGET;
   const conv = racelistBoatsToRows(entry.boats || []);
   const rows = conv.rows;
-  if (rows.length !== 6) return { ...entry, skip: "boats", picks: [], nPick: 0 };   // 壊れた出走表（例外を投げない）
+  if (rows.length !== 6) return { ...entry, skip: "boats", recos: [], nBuy: 0 };   // 壊れた出走表（例外を投げない）
 
   // 自動取得オッズ（当日・同一レース）。無ければオッズ無しとして続行（確率だけは出す）
   const key = `${entry.jcd}-${entry.rno}`;
@@ -2523,7 +2563,7 @@ function scanRaceEv(entry) {
   // （presale=発売前・failed=取得中 は欠場ではない）。オッズが無いレースは全 false。
   const stat = (od && Array.isArray(od.tansho_status)) ? od.tansho_status : null;
   const absentFlags = [0, 1, 2, 3, 4, 5].map(i => stat ? stat[i] === "absent" : false);
-  if (absentFlags.every(Boolean)) return { ...entry, skip: "allAbsent", picks: [], nPick: 0 };
+  if (absentFlags.every(Boolean)) return { ...entry, skip: "allAbsent", recos: [], nBuy: 0 };
 
   const result = predictFrom(rows, state.weights, state.alpha, absentFlags);   // ★state は読むだけ
   const confByLane = [null, null, null, null, null, null];
@@ -2531,34 +2571,44 @@ function scanRaceEv(entry) {
   const P = computeAllProbs(confByLane);
   const sections = buildBetRows(P, confByLane, oddsSrcFromFetched(od));
 
-  // 券種別の適正EV以上を🟢買いとして拾う。ev==null（オッズ未取得）は判定対象外。
-  const picks = [];
+  // オッズが入っている行数（hasOdds の判定に使う。従来と同一の数え方）
   let nAll = 0;
-  for (const sec of sections) {
-    const rec = evThresholdFor(sec.bt);
-    const r = calFactorFor(sec.bt);
-    for (const row of sec.rows) {
-      if (row.ev == null) continue;
-      nAll++;
-      if (row.ev < rec) continue;
-      picks.push({
-        bt: sec.bt, btKey: BT_KEY[sec.bt], target: row.target,
-        p: row.p, lo: row.lo, hi: row.hi, ev: row.ev, evHi: row.evHi,
-        rec, r, roi: row.ev * r, pCal: Math.min(row.p * r, 0.99),   // 表示確率は99%クランプ（§9.6.2）
-      });
-    }
-  }
-  // 想定回収率（EV×r）の降順。券種をまたいで1本の物差しで並ぶ（§9.6.5）。
-  // 同値は BT_ORDER（sections の並び）→買い目文字列で安定化する。
-  const btOrder = {}; sections.forEach((s, i) => { btOrder[s.bt] = i; });
-  picks.sort((a, b) => (b.roi - a.roi) || (btOrder[a.bt] - btOrder[b.bt]) ||
-                       (a.target < b.target ? -1 : a.target > b.target ? 1 : 0));
+  for (const sec of sections) for (const row of sec.rows) if (row.ev != null) nAll++;
+
+  /* ★おすすめ買い目（T-20260801-01・設計 §9.5.3-6/7）
+     社長FB「買い目じゃなくてお勧めの買い方をピックアップしてほしい」。
+     既存「3. おすすめ買い目」と同じ buildBets(1524) を **無改修で呼ぶだけ**。
+     レース型判定（鉄板/標準/混戦）→ 型別の券種メニュー → 推定的中率に比例した100円単位の配分、
+     までを buildBets が済ませてくれる。ここではその各点に「いまのオッズ・EV・判定」を付けるだけ。
+     ※初版は全7券種212通りの閾値超えを全部拾っており、1レース平均100点で「どう買うか」の答えに
+       なっていなかった（§9.0 の改訂履歴）。 */
+  const plan = buildBets(result, bud);
+  const recos = plan.bets.map(b => {
+    const row = pickupFindRow(sections, b.type, b.target);
+    const rec = evThresholdFor(b.type);
+    const r = calFactorFor(b.type);
+    const ev = row ? row.ev : null;
+    const p = row ? row.p : null;
+    return {
+      bt: b.type, btKey: BT_KEY[b.type], target: b.target,
+      desc: b.desc, amount: b.amount,
+      p, lo: row ? row.lo : null, hi: row ? row.hi : null,
+      ev, evHi: row ? row.evHi : null, rec, r,
+      roi: ev != null ? ev * r : null,
+      pCal: p != null ? Math.min(p * r, 0.99) : null,   // 表示確率は99%クランプ（§9.6.2）
+      buy: ev != null && ev >= rec,                     // 判定は「EV ≧ 券種別基準」の一本（AC-4）
+    };
+  });
 
   return {
     ...entry,
     oddsAt: od ? (od.at || null) : null,
     hasOdds: !!od && nAll > 0,
-    boats: rows, absentFlags, nAll, picks, nPick: picks.length,
+    boats: rows, absentFlags, nAll,
+    raceType: plan.raceType, typeNote: plan.typeNote,
+    budget: bud, effectiveBudget: plan.effectiveBudget,
+    recos, nBuy: recos.filter(x => x.buy).length,
+    totalAmount: recos.reduce((s, x) => s + (x.amount || 0), 0),
     activeCount: result.activeCount, closeRace: result.closeRace,
     ranked: result.ranked,
   };
@@ -2582,18 +2632,21 @@ async function runPickupScan(opts) {
   if (!src.ok) return { ok: false, reason: src.reason, src, scans: [], scanned: 0, noClose: 0, matched: 0, truncated: 0 };
   // 3) 時間窓で抽出（0 ≦ rem ≦ 30・締切の近い順）
   const col = collectUpcomingRaces(src, nowJstMinutes());
-  // 4) 1レースずつ走査
-  const scans = col.entries.map(e => scanRaceEv(e));
-  return { ok: true, src, scans, scanned: col.scanned, noClose: col.noClose,
+  // 4) 1レースずつ走査（予算は #pickupStake ＝ 1レースの予算・T-20260801-01）
+  const bud = pickupBudget();
+  const scans = col.entries.map(e => scanRaceEv(e, bud));
+  return { ok: true, src, scans, budget: bud, scanned: col.scanned, noClose: col.noClose,
            matched: col.matched, truncated: col.truncated, at: Date.now() };
 }
 
 /* ---- 表示（設計 §9.6）----
    ★選手名は必ず escapeHtml() を通す（XSS回帰の防止・F群で検証）。 */
 
-// 想定回収率の3層表示（確定⑤・F-6・AC-5）。判定（pick）は既に済んでいるので、ここでは再計算しない（§9.6.3）
-function pickupRoiText(p, th) {
-  const main = `<span class="pickup-roi-main good">${Math.round(p.roi * 100)}%</span>`;
+// 想定回収率の3層表示（確定⑤・F-6・AC-5）。判定（buy）は既に済んでいるので、ここでは再計算しない（§9.6.3）
+// ★buy を明示的に false で渡したときだけ主役の緑を外す（⚪見送りの行を緑で見せない）。
+//   引数2つで呼んだ従来の出力はバイト単位で不変（T-20260801-01）。
+function pickupRoiText(p, th, buy) {
+  const main = `<span class="pickup-roi-main${buy === false ? "" : " good"}">${Math.round(p.roi * 100)}%</span>`;
   const sub1 = `<span class="pickup-sub">期待値 ${p.ev.toFixed(2)} / 基準 ${p.rec}</span>`;
   const t = th.types[p.btKey] || {};
   const lv = t.live;
@@ -2609,6 +2662,11 @@ function pickupRoiText(p, th) {
       + `</span>`;
   }
   return main + sub1 + sub2;
+}
+
+// typeNote の **強調** を <b> にする。HTMLは通さない（必ず escapeHtml を先に掛ける）
+function pickupBold(s) {
+  return escapeHtml(String(s == null ? "" : s)).replace(/\*\*([^*]+)\*\*/g, "<b>$1</b>");
 }
 
 // 1レース分のカード
@@ -2628,7 +2686,7 @@ function pickupCard(s, th) {
     + `<span class="pickup-remain${remCls}">⏱ あと${s.rem}分</span>`
     + `<span class="pickup-close">締切 ${escapeHtml(s.closeHm)}</span>`
     + oddsHtml
-    + `<span class="pickup-count">🟢${s.nPick}点</span>`
+    + `<span class="pickup-count">🟢${s.nBuy}/${(s.recos || []).length}点</span>`
     + `<span class="pickup-links">`
     + `<a href="${boatraceUrl("oddstf", s.jcd, s.rno, s.ymd)}" target="_blank" rel="noopener">🌐オッズ</a>`
     + `<button type="button" class="btn-sub" data-pickup-import="1" data-ymd="${s.ymd}" data-jcd="${s.jcd}" data-rno="${s.rno}">⬇️ このレースを取り込む</button>`
@@ -2656,26 +2714,50 @@ function pickupCard(s, th) {
     + rows + `</table></div>`
     + `<p class="pickup-sub">${nFan}艇は選手個人の公式実績、残り${6 - nFan}艇はコース平均で補完しています。</p></details>`;
 
-  // 買い目リスト（F-4・§9.6.5）— 表示は🟢買いのみ
+  /* ★おすすめ買い目（T-20260801-01・設計 §9.6.5）
+     レース型のバッジと説明を買い目表の上に出す。混戦の「見送りが第一候補」がそのまま伝わるようにする。 */
+  const TYPE_ICON = { "鉄板": "🔒", "標準": "⚖️", "混戦": "🌀", "不成立": "⛔" };
+  const TYPE_CLS = { "鉄板": "tetsu", "標準": "hyojun", "混戦": "konsen", "不成立": "fusei" };
+  const rt = s.raceType || "";
+  const typeHtml = `<div class="pickup-typerow">`
+    + `<span class="pickup-type ${TYPE_CLS[rt] || "fusei"}">${TYPE_ICON[rt] || ""} ${escapeHtml(rt === "不成立" ? "レース不成立" : rt)}</span>`
+    + `<span class="pickup-typenote">${pickupBold(s.typeNote)}</span></div>`;
+
+  const recos = s.recos || [];
   let bets;
-  if (!s.hasOdds) {
-    bets = `<p class="pickup-note">💰 オッズ未取得（発売前の可能性）→ 期待値は出せません</p>`;
+  if (!recos.length) {
+    bets = `<p class="pickup-note">買い目はありません。</p>`;
   } else {
-    const shown = s.picks.slice(0, PICKUP_MAX_PER_RACE);
-    const body = shown.map(p => `<tr>`
-      + `<td>${escapeHtml(p.bt)}</td><td><b>${escapeHtml(p.target)}</b></td>`
-      + `<td>${(p.pCal * 100).toFixed(p.pCal >= 0.1 ? 1 : 2)}%<span class="pickup-sub">${p.btKey === "tansho" || p.btKey === "fukusho" ? "較" : "較*"}</span></td>`
-      + `<td>${p.lo}${p.hi != null && p.hi !== p.lo ? `〜${p.hi}` : ""}</td>`
-      + `<td>${pickupRoiText(p, th)}</td>`
-      + `<td>${evBadgeFor(p.bt, p.ev)}</td>`
-      + `<td><button type="button" class="btn-sub" data-pickup-buy="1" data-ymd="${s.ymd}" data-jcd="${s.jcd}" data-rno="${s.rno}"`
-      + ` data-bt="${escapeHtml(p.bt)}" data-target="${escapeHtml(p.target)}" data-odds="${p.lo}" data-ev="${p.ev.toFixed(3)}">🛒</button></td></tr>`).join("");
+    const body = recos.map(p => {
+      const oddsTxt = p.lo != null ? `${p.lo}${p.hi != null && p.hi !== p.lo ? `〜${p.hi}` : ""}` : "—";
+      const probTxt = p.pCal != null
+        ? `${(p.pCal * 100).toFixed(p.pCal >= 0.1 ? 1 : 2)}%<span class="pickup-sub">${p.btKey === "tansho" || p.btKey === "fukusho" ? "較" : "較*"}</span>`
+        : "—";
+      // オッズが無い買い目は EV が出せない。判定は⚪見送り扱いにして、買い方（券種・金額）だけは見せる。
+      const roiTxt = p.ev != null ? pickupRoiText(p, th, p.buy) : `<span class="pickup-sub">オッズ未取得</span>`;
+      const judge = p.ev != null ? evBadgeFor(p.bt, p.ev) : `<span class="ev-badge skip">— 判定不可</span>`;
+      return `<tr${p.buy ? "" : ` class="pickup-skip"`}>`
+        + `<td>${escapeHtml(p.bt)}</td><td><b>${escapeHtml(p.target)}</b></td>`
+        + `<td class="pickup-desc">${escapeHtml(p.desc || "")}</td>`
+        + `<td>${probTxt}</td>`
+        + `<td>${oddsTxt}</td>`
+        + `<td>${roiTxt}</td>`
+        + `<td>${judge}</td>`
+        + `<td class="pickup-amount">${(p.amount || 0).toLocaleString()}円</td>`
+        + `<td><button type="button" class="btn-sub" data-pickup-buy="1" data-ymd="${s.ymd}" data-jcd="${s.jcd}" data-rno="${s.rno}"`
+        + ` data-bt="${escapeHtml(p.bt)}" data-target="${escapeHtml(p.target)}" data-amount="${p.amount || 0}"`
+        + ` data-odds="${p.lo != null ? p.lo : ""}" data-ev="${p.ev != null ? p.ev.toFixed(3) : ""}">🛒</button></td></tr>`;
+    }).join("");
+    // 合計金額（既存 #betsTotal(456) と同じ考え方・合計は必ず effectiveBudget と一致する）
+    let total = `合計 ${(s.totalAmount || 0).toLocaleString()}円 ／ 予算 ${(s.budget || 0).toLocaleString()}円`;
+    if (rt === "混戦") total += `（混戦のため ${(s.effectiveBudget || 0).toLocaleString()}円 に自動減額）`;
+    if (!s.hasOdds) total += `\n💰 オッズ未取得（発売前の可能性）→ 期待値・判定は出せません（買い方だけ表示しています）`;
     bets = `<div class="table-scroll"><table class="bets-table pickup-bets">`
-      + `<tr><th>券種</th><th>買い目</th><th>確率</th><th>オッズ</th><th>想定回収率</th><th>判定</th><th></th></tr>`
+      + `<tr><th>券種</th><th>買い目</th><th>ねらい</th><th>確率</th><th>オッズ</th><th>想定回収率</th><th>判定</th><th>金額</th><th></th></tr>`
       + body + `</table></div>`
-      + (s.picks.length > shown.length ? `<p class="pickup-more">ほか ${s.picks.length - shown.length} 点（想定回収率の低い順に省略）</p>` : "");
+      + `<div class="pickup-total">${escapeHtml(total)}</div>`;
   }
-  return `<div class="pickup-card">${head}${racers}${bets}</div>`;
+  return `<div class="pickup-card">${head}${typeHtml}${bets}${racers}</div>`;
 }
 
 function renderPickup(res) {
@@ -2694,9 +2776,19 @@ function renderPickup(res) {
     list.innerHTML = `<p class="pickup-empty">${msg}</p>`;
     return;
   }
-  const cards = res.scans.filter(s => !s.skip && s.nPick > 0);   // 既定は🟢買いが1点以上のレースのみ（U-4）
-  const noOdds = res.scans.filter(s => !s.skip && !s.hasOdds).length;
-  const parts = [`走査 ${res.scanned} レース中 ${res.matched} 件が締切30分以内`, `🟢買いのあるレース ${cards.length} 件`];
+  /* ★絞り込みの基準（T-20260801-01・設計 §9.6.5③）
+     初版は「全買い目212通りのどれかが閾値を超えたレース」だった。いまは「おすすめ買い目の中に
+     🟢買いが1点以上あるレース」。#pickupOnlyBuy を外すと🟢0点のレースも見られる。 */
+  const onlyEl = document.getElementById("pickupOnlyBuy");
+  const onlyBuy = onlyEl ? !!onlyEl.checked : true;
+  const usable = res.scans.filter(s => !s.skip);
+  const nBuyRaces = usable.filter(s => s.nBuy > 0).length;
+  const cards = onlyBuy ? usable.filter(s => s.nBuy > 0) : usable;
+  const noOdds = usable.filter(s => !s.hasOdds).length;
+  const parts = [`走査 ${res.scanned} レース中 ${res.matched} 件が締切30分以内`,
+                 `おすすめ買い目に🟢買いがあるレース ${nBuyRaces} 件`];
+  if (!onlyBuy) parts.push(`※🟢が無いレースも表示中`);
+  if (res.budget) parts.push(`1レースの予算 ${res.budget.toLocaleString()}円`);
   if (res.noClose) parts.push(`※締切時刻不明の ${res.noClose} レースは対象外`);
   if (res.truncated) parts.push(`※表示は上限 ${PICKUP_MAX_RACES} レースまで（ほか ${res.truncated} 件）`);
   if (noOdds) parts.push(`※${noOdds} レースはオッズ未取得（発売前の可能性）→ 期待値は出せません`);
@@ -2708,7 +2800,7 @@ function renderPickup(res) {
       ? "いま締切30分以内のレースはありません。"
       : (noOdds >= res.matched
         ? "💰 オッズ未取得（発売前の可能性）→ 期待値は出せません。"
-        : "締切30分以内のレースはありますが、いま基準を超える買い目はありません。");
+        : "締切30分以内のレースはありますが、おすすめ買い目の中に基準を超える点（🟢買い）がありません。<br>上の「🟢買いがあるレースだけ表示」のチェックを外すと、おすすめの買い方だけは見られます。");
     list.innerHTML = `<p class="pickup-empty">${why}<br>（走査したレース数 ${res.scanned} 件・自動で1分ごとに更新します）</p>`;
     return;
   }
@@ -2718,10 +2810,11 @@ function renderPickup(res) {
 /* ---- 起動と自動更新（F-9・§9.5.5）---- */
 let pickupTimer = null;
 let pickupBusy = false;
+let pickupLastRes = null;   // 絞り込みチェックの切り替えを再走査せず再描画だけで済ませるための直近結果
 async function pickupRefresh(opts) {
   if (pickupBusy) return;
   pickupBusy = true;
-  try { renderPickup(await runPickupScan(opts)); }
+  try { pickupLastRes = await runPickupScan(opts); renderPickup(pickupLastRes); }
   catch (e) { /* 新機能の失敗が既存機能を止めない（N-5） */ }
   finally { pickupBusy = false; }
 }
@@ -2737,10 +2830,12 @@ function initPickup() {
     if (buy) {
       const d = buy.dataset;
       const note = document.getElementById("pickupNote");
-      const stakeEl = document.getElementById("pickupStake");   // ★#allBetsStake(415) には触れない
-      const stake = Number(stakeEl && stakeEl.value) || 100;
+      // ★T-20260801-01: 記録額は「その買い目に配分された金額」（#pickupStake はレースの予算であって1点の額ではない）。
+      //   既存「3. おすすめ買い目」の🛒(2258) が行の金額欄で記録するのと同じ考え方。★#allBetsStake(415) には触れない
+      const stake = Number(d.amount) > 0 ? Number(d.amount) : pickupBudget();
       // 第6引数に「そのカードのレース」を渡す＝直前に別レースを予測していても記録先が入れ替わらない（AC-8）
-      addPurchase(d.bt, d.target, Number(d.odds), Number(d.ev), stake, { ymd: d.ymd, jcd: d.jcd, rno: d.rno });
+      addPurchase(d.bt, d.target, d.odds ? Number(d.odds) : null, d.ev ? Number(d.ev) : null,
+                  stake, { ymd: d.ymd, jcd: d.jcd, rno: d.rno });
       // §2〜§5 は #resultSection(376) が hidden のあいだ画面に出ない。既存セクションを勝手に開かず（N-1）、
       // 代わりに #pickupNote で結果を伝える（§9.7.4）。
       if (note) note.innerHTML = `✅ ${escapeHtml(d.jcd)}場 ${escapeHtml(d.rno)}R ${escapeHtml(d.bt)} ${escapeHtml(d.target)} を`
@@ -2768,6 +2863,11 @@ function initPickup() {
     }
   });
   document.getElementById("pickupReload").addEventListener("click", () => pickupRefresh({ forceOdds: true }));
+  // ★T-20260801-01: 予算を変えたら配分が変わるので走り直す（通信はしない）。絞り込みは再描画だけで足りる。
+  const stakeEl2 = document.getElementById("pickupStake");
+  if (stakeEl2) stakeEl2.addEventListener("change", () => pickupRefresh({ skipFetch: true }));
+  const onlyEl2 = document.getElementById("pickupOnlyBuy");
+  if (onlyEl2) onlyEl2.addEventListener("change", () => { if (pickupLastRes) renderPickup(pickupLastRes); });
 
   // 起動直後は fetchedRacelist がまだ null（initRacelistUI の取得が非同期）。
   // まず1回走査 → 取れなければ案内を出し、出走表の取得完了後にもう一度走査する（§9.5.5）。
